@@ -59,7 +59,9 @@ pixi run offsets
 What happens:
 - A folder dialog opens.
 - The selected folder is copied to a subfolder named offset corrected.
-- Offsets are applied in place to GP2 files in that copied folder.
+- For each GP2 file, the `;Offset_m=` header value is applied to GPS coordinates in that same file.
+- After applying the correction, `;Offset_m=` is reset to `0.00,0.00,0.00` in the copied file.
+- This offset application outside of software is a temporary workaround for a known Ekko_Project v6 bug (currently being fixed): 
 
 Example 2: Edit GP2 header values
 
@@ -72,6 +74,10 @@ What happens:
 - The selected folder is copied to a subfolder named edit_headers.
 - A small form asks for X/Y/Z offset and latency values.
 - Existing header lines are updated in place in GP2 files in the copied folder.
+
+When to use this after `pixi run offsets`:
+- You only need `pixi run edit_headers` if you want to set new header values (for example, a different planned `Offset_m` or latency) for later processing.
+- You do not need it just to zero offsets after `pixi run offsets`; that already happens automatically.
 
 ## License
 
