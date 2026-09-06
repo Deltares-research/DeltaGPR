@@ -62,7 +62,9 @@ def parse_gpgga(sentence: str):
     )
 
 
-def format_gpgga_with_checksum(gga, latitude: float, longitude: float, altitude_msl_m: float) -> str:
+def format_gpgga_with_checksum(
+    gga, latitude: float, longitude: float, altitude_msl_m: float
+) -> str:
     fields = gga.fields.copy()
     fields[2], fields[3] = _decimal_to_nmea(latitude, True)
     fields[4], fields[5] = _decimal_to_nmea(longitude, False)
@@ -96,56 +98,61 @@ def inverse_project_xy_to_latlon(x: float, y: float, projector) -> tuple[float, 
     return float(lat), float(lon)
 
 
-def estimate_heading_series(xs: list[float], ys: list[float], min_baseline_m: float = 0.5, window_max: int = 50) -> list[float]:
-    n = len(xs)
-    raw = [math.nan] * n
+def estimate_line_heading(xs: list[float], ys: list[float]) -> float:
+    """Return the directed principal-axis heading of a survey line in radians.
 
-    def ok(i: int) -> bool:
-        return 0 <= i < n and not (math.isnan(xs[i]) or math.isnan(ys[i]))
+    One file-wide heading ensures that its offset is a rigid translation. Local
+    headings would deform the line where stationary GPS fixes are noisy.
+    """
+    valid = [
+        (x, y)
+        for x, y in zip(xs, ys, strict=False)
+        if not (math.isnan(x) or math.isnan(y))
+    ]
+    if len(valid) < 2:
+        return math.nan
 
-    for i in range(n):
-        if not ok(i):
-            continue
-        for w in range(1, window_max + 1):
-            l, r = i - w, i + w
-            while l >= 0 and not ok(l):
-                l -= 1
-            while r < n and not ok(r):
-                r += 1
-            if ok(l) and ok(r) and math.hypot(xs[r] - xs[l], ys[r] - ys[l]) >= min_baseline_m:
-                raw[i] = math.atan2(ys[r] - ys[l], xs[r] - xs[l])
-                break
-        if math.isnan(raw[i]):
-            if ok(i - 1):
-                raw[i] = math.atan2(ys[i] - ys[i - 1], xs[i] - xs[i - 1])
-            elif ok(i + 1):
-                raw[i] = math.atan2(ys[i + 1] - ys[i], xs[i + 1] - xs[i])
+    mean_x = statistics.mean(x for x, _ in valid)
+    mean_y = statistics.mean(y for _, y in valid)
+    covariance_xx = sum((x - mean_x) ** 2 for x, _ in valid)
+    covariance_yy = sum((y - mean_y) ** 2 for _, y in valid)
+    covariance_xy = sum((x - mean_x) * (y - mean_y) for x, y in valid)
+    heading = 0.5 * math.atan2(2.0 * covariance_xy, covariance_xx - covariance_yy)
 
-    smooth = [math.nan] * n
-    for i in range(n):
-        if math.isnan(raw[i]):
-            continue
-        sx = sy = 0.0
-        for j in range(max(0, i - 2), min(n, i + 3)):
-            if not math.isnan(raw[j]):
-                sx += math.cos(raw[j])
-                sy += math.sin(raw[j])
-        if sx or sy:
-            smooth[i] = math.atan2(sy, sx)
-    return smooth
+    start_x, start_y = valid[0]
+    end_x, end_y = valid[-1]
+    if (
+        math.cos(heading) * (end_x - start_x) + math.sin(heading) * (end_y - start_y)
+        < 0
+    ):
+        heading += math.pi
+    return heading
 
 
-def apply_offset(x: float, y: float, z: float, heading_rad: float, offset: Offset) -> tuple[float, float, float]:
+def apply_offset(
+    x: float, y: float, z: float, heading_rad: float, offset: Offset
+) -> tuple[float, float, float]:
+    """Translate one projected position using the GP2 forward/right offset."""
     if math.isnan(heading_rad):
         return x, y, z
     fx, fy = math.cos(heading_rad), math.sin(heading_rad)
     rx, ry = math.sin(heading_rad), -math.cos(heading_rad)
-    return x + offset.offset_y * fx + offset.offset_x * rx, y + offset.offset_y * fy + offset.offset_x * ry, z + offset.offset_z
+    return (
+        x + offset.offset_y * fx + offset.offset_x * rx,
+        y + offset.offset_y * fy + offset.offset_x * ry,
+        z + offset.offset_z,
+    )
 
 
 def _parse_csv_line(line: str) -> tuple[list[str], str]:
     nl = "\r\n" if line.endswith("\r\n") else "\n"
-    body = line[:-2] if line.endswith("\r\n") else line[:-1] if line.endswith("\n") else line
+    body = (
+        line[:-2]
+        if line.endswith("\r\n")
+        else line[:-1]
+        if line.endswith("\n")
+        else line
+    )
     return next(csv.reader([body])), nl
 
 
@@ -156,19 +163,31 @@ def _fmt_csv_line(row: list[str], nl: str) -> str:
 
 
 def process_gp2_in_place(path: Path) -> None:
+    """Apply the GP2 header offset rigidly, then reset it to zero."""
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not lines:
         return
 
-    h = next((i for i, ln in enumerate(lines) if not ln.strip().startswith(";") and "gps" in ln.lower()), None)
+    h = next(
+        (
+            i
+            for i, ln in enumerate(lines)
+            if not ln.strip().startswith(";") and "gps" in ln.lower()
+        ),
+        None,
+    )
     if h is None:
         return
-    o = next((i for i in range(h) if lines[i].strip().lower().startswith(";offset_m=")), None)
+    o = next(
+        (i for i in range(h) if lines[i].strip().lower().startswith(";offset_m=")), None
+    )
     if o is None:
         raise ValueError(f"{path}: missing ;Offset_m=")
 
     header, _ = _parse_csv_line(lines[h])
-    gps_idx = next((i for i, name in enumerate(header) if name.strip().lower() == "gps"), None)
+    gps_idx = next(
+        (i for i, name in enumerate(header) if name.strip().lower() == "gps"), None
+    )
     if gps_idx is None:
         return
 
@@ -188,7 +207,10 @@ def process_gp2_in_place(path: Path) -> None:
         return
 
     offset = parse_offset_line(lines[o])
-    proj = _make_projector(statistics.mean(g.latitude for g in valid), statistics.mean(g.longitude for g in valid))
+    proj = _make_projector(
+        statistics.mean(g.latitude for g in valid),
+        statistics.mean(g.longitude for g in valid),
+    )
 
     xs, ys, zs = [], [], []
     for g in ggas:
@@ -202,12 +224,12 @@ def process_gp2_in_place(path: Path) -> None:
         ys.append(y)
         zs.append(g.z_m)
 
-    hs = estimate_heading_series(xs, ys)
+    heading = estimate_line_heading(xs, ys)
     xyz2 = [
         (math.nan, math.nan, math.nan)
         if any(math.isnan(v) for v in (x, y, z))
-        else apply_offset(x, y, z, hrad, offset)
-        for x, y, z, hrad in zip(xs, ys, zs, hs, strict=False)
+        else apply_offset(x, y, z, heading, offset)
+        for x, y, z in zip(xs, ys, zs, strict=False)
     ]
 
     nl = "\r\n" if lines[o].endswith("\r\n") else "\n"

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog
 
 
@@ -42,7 +42,9 @@ def copy_to_subfolder(source: Path, subfolder_name: str) -> Path:
 
 
 def find_gp2_files(root: Path) -> list[Path]:
-    return sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".gp2")
+    return sorted(
+        p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == ".gp2"
+    )
 
 
 def detect_data_header_idx(lines: list[str]) -> int:
@@ -52,7 +54,9 @@ def detect_data_header_idx(lines: list[str]) -> int:
     return len(lines)
 
 
-def update_existing_header(lines: list[str], keys: list[str], value: str, data_header_idx: int, nl: str) -> bool:
+def update_existing_header(
+    lines: list[str], keys: list[str], value: str, data_header_idx: int, nl: str
+) -> bool:
     prefixes = [f";{key}=".lower() for key in keys]
     for i in range(data_header_idx):
         stripped = lines[i].strip()

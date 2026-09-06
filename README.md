@@ -79,6 +79,28 @@ When to use this after `pixi run offsets`:
 - You only need `pixi run edit_headers` if you want to set new header values (for example, a different planned `Offset_m` or latency) for later processing.
 - You do not need it just to zero offsets after `pixi run offsets`; that already happens automatically.
 
+Example 3: Export GP2 navigation as tracklines
+
+```powershell
+pixi run tracklines
+```
+
+A file dialog opens to select one or more GP2 files, followed by an output CRS
+prompt. The shapefile is written to a `shapefile` subfolder with the selected file
+range and CRS in its name, for example
+`Line4-ch2_to_Line6-ch6_EPSG28992.shp`.
+
+The same functionality can be called from Python:
+
+```python
+from deltagpr.tools import tracklines_to_shape
+
+tracklines_to_shape("data", output_crs=28992)
+```
+
+Each GP2 file becomes one line feature. GP2 coordinates are read as WGS 84 and
+can be transformed to any CRS understood by `pyproj`, such as Dutch RD New above.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE).

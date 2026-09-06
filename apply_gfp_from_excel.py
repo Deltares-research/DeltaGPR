@@ -14,9 +14,13 @@ def load_excel_table(xlsx_path: Path) -> dict[str, dict[str, float | bool]]:
     required = ["linename", "x_start", "y_start", "x_end", "y_end"]
     missing = [c for c in required if c not in cols]
     if missing:
-        raise ValueError(f"Excel missing required columns: {missing}. Present: {list(df.columns)}")
+        raise ValueError(
+            f"Excel missing required columns: {missing}. Present: {list(df.columns)}"
+        )
 
-    reverse_col = next((c for c in ["reverse", "flip", "direction_flip"] if c in cols), None)
+    reverse_col = next(
+        (c for c in ["reverse", "flip", "direction_flip"] if c in cols), None
+    )
     out: dict[str, dict[str, float | bool]] = {}
 
     for _, row in df.iterrows():
@@ -46,7 +50,9 @@ def load_excel_table(xlsx_path: Path) -> dict[str, dict[str, float | bool]]:
     return out
 
 
-def update_line_geometry(line_elem: ET.Element, x0: float, y0: float, x1: float, y1: float) -> tuple[bool, str]:
+def update_line_geometry(
+    line_elem: ET.Element, x0: float, y0: float, x1: float, y1: float
+) -> tuple[bool, str]:
     data_file = line_elem.find("./DataFile") or line_elem.find(".//DataFile")
     if data_file is None:
         return False, "No DataFile node"
@@ -101,7 +107,9 @@ def update_line_geometry(line_elem: ET.Element, x0: float, y0: float, x1: float,
         odom.set("end", f"{odom_start + length:.6f}")
         odom.set("step", f"{step:.6f}")
 
-    for settings in list(data_file.findall("./Settings")) + list(line_elem.findall("./Settings")):
+    for settings in list(data_file.findall("./Settings")) + list(
+        line_elem.findall("./Settings")
+    ):
         step_size = settings.find("./StepSize")
         if step_size is not None:
             step_size.text = f"{step:.6f}"
@@ -113,12 +121,18 @@ def update_line_geometry(line_elem: ET.Element, x0: float, y0: float, x1: float,
     return True, f"length={length:.3f} m, step={step:.6f} m"
 
 
-def apply_updates(gfp_path: Path, xlsx_path: Path, out_path: Path | None) -> tuple[list[tuple[str, bool, str]], list[str], Path]:
+def apply_updates(
+    gfp_path: Path, xlsx_path: Path, out_path: Path | None
+) -> tuple[list[tuple[str, bool, str]], list[str], Path]:
     tree = ET.parse(gfp_path)
     root = tree.getroot()
 
     excel = load_excel_table(xlsx_path)
-    lines = {line.attrib.get("name"): line for line in root.findall(".//Line") if line.attrib.get("name")}
+    lines = {
+        line.attrib.get("name"): line
+        for line in root.findall(".//Line")
+        if line.attrib.get("name")
+    }
 
     report: list[tuple[str, bool, str]] = []
     missing: list[str] = []
@@ -143,11 +157,19 @@ def apply_updates(gfp_path: Path, xlsx_path: Path, out_path: Path | None) -> tup
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Apply line geometry updates to Sensors & Software GFP XML from Excel"
+        description=(
+            "Apply line geometry updates to Sensors & Software GFP XML from Excel"
+        )
     )
-    parser.add_argument("--gfp", default="water_soil_flume.xml", help="Path to .gfp/.xml file")
-    parser.add_argument("--excel", default="gfp_lines_template.xlsx", help="Path to Excel table")
-    parser.add_argument("--out", default="", help="Output XML path (default: <gfp>.updated.xml)")
+    parser.add_argument(
+        "--gfp", default="water_soil_flume.xml", help="Path to .gfp/.xml file"
+    )
+    parser.add_argument(
+        "--excel", default="gfp_lines_template.xlsx", help="Path to Excel table"
+    )
+    parser.add_argument(
+        "--out", default="", help="Output XML path (default: <gfp>.updated.xml)"
+    )
     args = parser.parse_args()
 
     report, missing, out = apply_updates(

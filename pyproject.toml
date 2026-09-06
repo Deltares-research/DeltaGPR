@@ -1,5 +1,6 @@
 [project]
 dependencies = [
+  "geopandas>=1.0",
   "pandas>=2.0",
   "openpyxl>=3.1",
   "pyproj>=3.6",
@@ -31,14 +32,20 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 [tool.pixi.pypi-dependencies]
 deltagpr = { path = ".", editable = true }
 
+[tool.pixi.dependencies]
+ruff = ">=0.12"
+
 [tool.pixi.tasks]
 install = "python -m pip install -e ."
 offsets = "python apply_offsets.py"
 edit_headers = "python edit_headers.py"
+tracklines = "python export_tracklines.py"
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+
+[tool.ruff.lint]
 select = ["F", "E", "W", "N", "I001"]
 ignore = ["F401"]
 unfixable = ["F401"]

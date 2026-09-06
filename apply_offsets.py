@@ -3,18 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from _gp2_common import choose_folder, copy_to_subfolder, find_gp2_files
-from _gp2_offsets_core import (
-    Offset,
-    _make_projector,
-    apply_offset,
-    estimate_heading_series,
-    format_gpgga_with_checksum,
-    inverse_project_xy_to_latlon,
-    parse_gpgga,
-    parse_offset_line,
-    process_gp2_in_place,
-    project_latlon_to_xy,
-)
+from _gp2_offsets_core import process_gp2_in_place
 
 
 def main() -> None:
