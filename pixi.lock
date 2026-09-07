@@ -236,12 +236,13 @@ packages:
 - pypi: ./
   name: deltagpr
   version: 0.1.0
-  sha256: 78d320a63b678ab9338d5e93aa42ba3046e072acfe6a6029fb3d07c68bfed254
+  sha256: e93ea0feb647e4bfed4f398aaa11e5234e074ed4c3884920e1efc8d0619a93c0
   requires_dist:
   - geopandas>=1.0
   - pandas>=2.0
   - openpyxl>=3.1
   - pyproj>=3.6
+  - shapely>=2.0
   requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl
   name: et-xmlfile

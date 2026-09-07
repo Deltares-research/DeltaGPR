@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -8,6 +7,8 @@ from pathlib import Path
 import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import LineString
+
+from .gp2 import find_column, find_data_header, parse_csv_line, parse_gpgga
 
 
 def _gp2_files(paths: str | Path | Iterable[str | Path]) -> list[Path]:
@@ -25,22 +26,12 @@ def _gp2_files(paths: str | Path | Iterable[str | Path]) -> list[Path]:
 
 def _read_coordinates(path: Path) -> list[tuple[float, float]]:
     rows = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    header_index = next(
-        (
-            index
-            for index, line in enumerate(rows)
-            if not line.lstrip().startswith(";") and "gps" in line.lower()
-        ),
-        None,
-    )
+    header_index = find_data_header(rows)
     if header_index is None:
         return []
 
-    header = next(csv.reader([rows[header_index]]))
-    gps_index = next(
-        (index for index, name in enumerate(header) if name.strip().lower() == "gps"),
-        None,
-    )
+    header, _ = parse_csv_line(rows[header_index])
+    gps_index = find_column(header, "gps")
     if gps_index is None:
         return []
 
@@ -49,22 +40,12 @@ def _read_coordinates(path: Path) -> list[tuple[float, float]]:
         if not line.strip() or line.lstrip().startswith(";"):
             continue
         try:
-            row = next(csv.reader([line]))
-            fields = row[gps_index].strip().strip('"').split("*", 1)[0].split(",")
-            if len(fields) < 6 or not fields[0].endswith("GGA"):
-                continue
-            latitude = _nmea_to_decimal(fields[2], fields[3])
-            longitude = _nmea_to_decimal(fields[4], fields[5])
-            coordinates.append((longitude, latitude))
+            row, _ = parse_csv_line(line)
+            gga = parse_gpgga(row[gps_index])
+            coordinates.append((gga.longitude, gga.latitude))
         except (IndexError, TypeError, ValueError):
             continue
     return coordinates
-
-
-def _nmea_to_decimal(value: str, hemisphere: str) -> float:
-    degree_width = 2 if hemisphere.upper() in {"N", "S"} else 3
-    decimal = int(value[:degree_width]) + float(value[degree_width:]) / 60.0
-    return -decimal if hemisphere.upper() in {"S", "W"} else decimal
 
 
 def _default_output_path(files: list[Path], output_crs: object) -> Path:

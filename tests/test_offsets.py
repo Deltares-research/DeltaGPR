@@ -1,13 +1,14 @@
+import math
 import unittest
 
-from _gp2_offsets_core import (
+from deltagpr.gp2 import format_gpgga_with_checksum, parse_gpgga
+from deltagpr.offsets import (
     Offset,
     _make_projector,
     apply_offset,
+    estimate_heading_series,
     estimate_line_heading,
-    format_gpgga_with_checksum,
     inverse_project_xy_to_latlon,
-    parse_gpgga,
     parse_offset_line,
     project_latlon_to_xy,
 )
@@ -40,12 +41,12 @@ class TestApplyOffsetsHelpers(unittest.TestCase):
         self.assertAlmostEqual(lat, lat2, places=6)
         self.assertAlmostEqual(lon, lon2, places=6)
 
-    def test_apply_offset(self):
-        off = Offset(offset_x=1.0, offset_y=2.0, offset_z=0.5)
+    def test_header_offset_points_from_sensor_to_gnss(self):
+        off = Offset(offset_x=0.0, offset_y=-0.87, offset_z=0.5)
         x2, y2, z2 = apply_offset(10.0, 20.0, 3.0, 0.0, off)
-        self.assertAlmostEqual(x2, 12.0)
-        self.assertAlmostEqual(y2, 19.0)
-        self.assertAlmostEqual(z2, 3.5)
+        self.assertAlmostEqual(x2, 10.87)
+        self.assertAlmostEqual(y2, 20.0)
+        self.assertAlmostEqual(z2, 2.5)
 
     def test_file_wide_offset_is_a_rigid_translation(self):
         xs = [0.0, 1.0, 2.0, 3.0, 3.02, 2.98]
@@ -66,6 +67,46 @@ class TestApplyOffsetsHelpers(unittest.TestCase):
             self.assertAlmostEqual(
                 shifted[index][1] - shifted[index - 1][1], ys[index] - ys[index - 1]
             )
+
+    def test_local_headings_follow_a_bend(self):
+        xs = [0.0, 0.5, 1.0, 1.0, 1.0]
+        ys = [0.0, 0.0, 0.0, 0.5, 1.0]
+
+        headings = estimate_heading_series(xs, ys)
+
+        self.assertAlmostEqual(headings[0], 0.0)
+        self.assertAlmostEqual(headings[2], math.pi / 4)
+        self.assertAlmostEqual(headings[-1], math.pi / 2)
+
+    def test_endpoint_clusters_inherit_nearest_reliable_heading(self):
+        xs = [0.00, 0.01, -0.01, 0.00, 0.50, 1.00, 1.50, 2.00, 2.01, 1.99]
+        ys = [0.00, -0.01, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00, 0.01, -0.01]
+
+        headings = estimate_heading_series(xs, ys)
+
+        for heading in headings[:4]:
+            self.assertAlmostEqual(heading, headings[4])
+        for heading in headings[7:]:
+            self.assertAlmostEqual(heading, headings[6])
+
+    def test_local_headings_preserve_zigzags(self):
+        xs = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+        ys = [0.0, 0.5, 1.0, 0.5, 0.0, 0.5, 1.0]
+
+        headings = estimate_heading_series(xs, ys)
+
+        self.assertGreater(headings[0], 0.0)
+        self.assertLess(headings[3], 0.0)
+        self.assertGreater(headings[-1], 0.0)
+
+    def test_short_track_uses_one_rigid_fallback_heading(self):
+        xs = [0.00, 0.01, -0.01, 0.02]
+        ys = [0.00, -0.01, 0.01, 0.00]
+
+        headings = estimate_heading_series(xs, ys)
+
+        for heading in headings[1:]:
+            self.assertAlmostEqual(heading, headings[0])
 
 
 if __name__ == "__main__":

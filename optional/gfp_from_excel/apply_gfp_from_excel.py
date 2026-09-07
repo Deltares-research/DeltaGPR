@@ -53,7 +53,9 @@ def load_excel_table(xlsx_path: Path) -> dict[str, dict[str, float | bool]]:
 def update_line_geometry(
     line_elem: ET.Element, x0: float, y0: float, x1: float, y1: float
 ) -> tuple[bool, str]:
-    data_file = line_elem.find("./DataFile") or line_elem.find(".//DataFile")
+    data_file = line_elem.find("./DataFile")
+    if data_file is None:
+        data_file = line_elem.find(".//DataFile")
     if data_file is None:
         return False, "No DataFile node"
 
@@ -156,26 +158,35 @@ def apply_updates(
 
 
 def main() -> None:
+    example_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(
         description=(
             "Apply line geometry updates to Sensors & Software GFP XML from Excel"
         )
     )
     parser.add_argument(
-        "--gfp", default="water_soil_flume.xml", help="Path to .gfp/.xml file"
+        "--gfp",
+        default=example_dir / "water_soil_flume.xml",
+        type=Path,
+        help="Path to .gfp/.xml file",
     )
     parser.add_argument(
-        "--excel", default="gfp_lines_template.xlsx", help="Path to Excel table"
+        "--excel",
+        default=example_dir / "gfp_lines_template.xlsx",
+        type=Path,
+        help="Path to Excel table",
     )
     parser.add_argument(
-        "--out", default="", help="Output XML path (default: <gfp>.updated.xml)"
+        "--out",
+        type=Path,
+        help="Output XML path (default: <gfp>.updated.xml)",
     )
     args = parser.parse_args()
 
     report, missing, out = apply_updates(
-        gfp_path=Path(args.gfp),
-        xlsx_path=Path(args.excel),
-        out_path=Path(args.out) if args.out else None,
+        gfp_path=args.gfp,
+        xlsx_path=args.excel,
+        out_path=args.out,
     )
 
     print(f"Updated {len(report)} lines. Missing in GFP: {len(missing)}. Output: {out}")

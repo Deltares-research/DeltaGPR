@@ -4,13 +4,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
 
-from _gp2_common import (
-    choose_folder,
-    copy_to_subfolder,
-    detect_data_header_idx,
-    find_gp2_files,
-    update_existing_header,
-)
+from .dialogs import choose_gp2_files, copy_selected_to_subfolder
+from .gp2 import find_data_header, update_existing_header
 
 
 def prompt_header_values() -> tuple[str, str, str, str]:
@@ -81,7 +76,9 @@ def edit_gp2_headers_in_place(
         return False, False
 
     nl = "\r\n" if any(line.endswith("\r\n") for line in lines[:10]) else "\n"
-    data_header_idx = detect_data_header_idx(lines)
+    data_header_idx = find_data_header(lines)
+    if data_header_idx is None:
+        data_header_idx = len(lines)
 
     offset_updated = update_existing_header(
         lines, ["Offset_m"], f"{x_off},{y_off},{z_off}", data_header_idx, nl
@@ -95,15 +92,12 @@ def edit_gp2_headers_in_place(
 
 
 def main() -> None:
-    source = choose_folder("Select folder containing GP2 files")
+    selected = choose_gp2_files("Select GP2 files to edit")
     x_off, y_off, z_off, latency = prompt_header_values()
 
-    target = copy_to_subfolder(source, "edit_headers")
-    gp2_files = find_gp2_files(target)
-    if not gp2_files:
-        raise SystemExit(f"No .gp2 files found in {target}")
+    gp2_files = copy_selected_to_subfolder(selected, "edit_headers")
 
-    print(f"Copied data to: {target}")
+    print(f"Copied {len(gp2_files)} selected file(s) to edit_headers folder(s)")
     print(
         f"Applying header edits: Offset_m={x_off},{y_off},{z_off} | Latency={latency}"
     )

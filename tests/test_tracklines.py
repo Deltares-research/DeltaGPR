@@ -4,8 +4,8 @@ from pathlib import Path
 
 import geopandas as gpd
 
-from deltagpr.tools import tracklines_to_shape
-from deltagpr.tools.tracklines import _default_output_path
+from deltagpr import tracklines_to_shape
+from deltagpr.tracklines import _default_output_path
 
 
 def _write_gp2(path: Path, coordinates: list[tuple[str, str, str, str]]) -> None:

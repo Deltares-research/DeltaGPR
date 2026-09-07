@@ -6,3 +6,11 @@
 __pycache__/
 *.py[cod]
 .ruff_cache/
+
+# Generated processing outputs
+**/offset corrected/
+**/offset_corrected/
+**/clean_coordinates/
+**/edit_headers/
+**/shapefile/
+*.updated.xml

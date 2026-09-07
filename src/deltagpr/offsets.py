@@ -1,13 +1,20 @@
 from __future__ import annotations
 
-import csv
-import io
 import math
 import statistics
 from pathlib import Path
-from types import SimpleNamespace
 
 from pyproj import Transformer
+
+from .dialogs import choose_gp2_files, copy_selected_to_subfolder
+from .gp2 import (
+    find_column,
+    find_data_header,
+    format_csv_line,
+    format_gpgga_with_checksum,
+    parse_csv_line,
+    parse_gpgga,
+)
 
 
 class Offset:
@@ -25,56 +32,6 @@ def parse_offset_line(line: str) -> Offset:
         raise ValueError("Not an Offset_m line")
     x, y, z = [float(v.strip()) for v in text.split("=", 1)[1].split(",")]
     return Offset(x, y, z)
-
-
-def _nmea_to_decimal(coord: str, hemi: str) -> float:
-    w = 2 if hemi.upper() in {"N", "S"} else 3
-    val = int(coord[:w]) + float(coord[w:]) / 60.0
-    return -val if hemi.upper() in {"S", "W"} else val
-
-
-def _decimal_to_nmea(value: float, is_lat: bool) -> tuple[str, str]:
-    pos, neg = ("N", "S") if is_lat else ("E", "W")
-    hemi = pos if value >= 0 else neg
-    width = 2 if is_lat else 3
-    v = abs(value)
-    deg = int(v)
-    mins = (v - deg) * 60.0
-    return f"{deg:0{width}d}{mins:010.7f}", hemi
-
-
-def parse_gpgga(sentence: str):
-    text = sentence.strip().strip('"')
-    fields = text.split("*", 1)[0].split(",")
-    if not text.startswith("$") or len(fields) < 15 or not fields[0].endswith("GGA"):
-        raise ValueError("Invalid GGA sentence")
-    alt = float(fields[9]) if fields[9] else math.nan
-    geoid = float(fields[11]) if fields[11] else None
-    z = alt + geoid if geoid is not None and not math.isnan(alt) else alt
-    return SimpleNamespace(
-        raw=text,
-        fields=fields,
-        latitude=_nmea_to_decimal(fields[2], fields[3]),
-        longitude=_nmea_to_decimal(fields[4], fields[5]),
-        altitude_msl_m=alt,
-        geoid_sep_m=geoid,
-        z_m=z,
-    )
-
-
-def format_gpgga_with_checksum(
-    gga, latitude: float, longitude: float, altitude_msl_m: float
-) -> str:
-    fields = gga.fields.copy()
-    fields[2], fields[3] = _decimal_to_nmea(latitude, True)
-    fields[4], fields[5] = _decimal_to_nmea(longitude, False)
-    decimals = len(gga.fields[9].split(".", 1)[1]) if "." in gga.fields[9] else 3
-    fields[9] = f"{altitude_msl_m:.{decimals}f}"
-    body = ",".join(fields)
-    checksum = 0
-    for ch in body[1:]:
-        checksum ^= ord(ch)
-    return f"{body}*{checksum:02X}"
 
 
 def _make_projector(lat_ref: float, lon_ref: float):
@@ -129,53 +86,91 @@ def estimate_line_heading(xs: list[float], ys: list[float]) -> float:
     return heading
 
 
+def estimate_heading_series(
+    xs: list[float], ys: list[float], min_baseline_m: float = 0.5
+) -> list[float]:
+    """Estimate local track headings without using near-stationary GPS fixes."""
+    n = len(xs)
+    headings = [math.nan] * n
+
+    def valid(index: int) -> bool:
+        return 0 <= index < n and not (
+            math.isnan(xs[index]) or math.isnan(ys[index])
+        )
+
+    for index in range(n):
+        if not valid(index):
+            continue
+
+        left = next(
+            (
+                candidate
+                for candidate in range(index - 1, -1, -1)
+                if valid(candidate)
+                and math.hypot(
+                    xs[index] - xs[candidate], ys[index] - ys[candidate]
+                )
+                >= min_baseline_m
+            ),
+            None,
+        )
+        right = next(
+            (
+                candidate
+                for candidate in range(index + 1, n)
+                if valid(candidate)
+                and math.hypot(
+                    xs[candidate] - xs[index], ys[candidate] - ys[index]
+                )
+                >= min_baseline_m
+            ),
+            None,
+        )
+        if left is not None and right is not None:
+            headings[index] = math.atan2(
+                ys[right] - ys[left], xs[right] - xs[left]
+            )
+
+    reliable = [
+        index for index, heading in enumerate(headings) if not math.isnan(heading)
+    ]
+    if not reliable:
+        fallback = estimate_line_heading(xs, ys)
+        return [fallback if valid(index) else math.nan for index in range(n)]
+
+    first, last = reliable[0], reliable[-1]
+    for index in range(first):
+        if valid(index):
+            headings[index] = headings[first]
+    for index in range(last + 1, n):
+        if valid(index):
+            headings[index] = headings[last]
+
+    return headings
+
+
 def apply_offset(
     x: float, y: float, z: float, heading_rad: float, offset: Offset
 ) -> tuple[float, float, float]:
-    """Translate one projected position using the GP2 forward/right offset."""
+    """Translate a GNSS position to the sensor using the GP2 antenna offset."""
     if math.isnan(heading_rad):
         return x, y, z
     fx, fy = math.cos(heading_rad), math.sin(heading_rad)
     rx, ry = math.sin(heading_rad), -math.cos(heading_rad)
     return (
-        x + offset.offset_y * fx + offset.offset_x * rx,
-        y + offset.offset_y * fy + offset.offset_x * ry,
-        z + offset.offset_z,
+        x - offset.offset_y * fx - offset.offset_x * rx,
+        y - offset.offset_y * fy - offset.offset_x * ry,
+        z - offset.offset_z,
     )
-
-
-def _parse_csv_line(line: str) -> tuple[list[str], str]:
-    nl = "\r\n" if line.endswith("\r\n") else "\n"
-    body = (
-        line[:-2]
-        if line.endswith("\r\n")
-        else line[:-1]
-        if line.endswith("\n")
-        else line
-    )
-    return next(csv.reader([body])), nl
-
-
-def _fmt_csv_line(row: list[str], nl: str) -> str:
-    s = io.StringIO()
-    csv.writer(s, lineterminator="", quoting=csv.QUOTE_MINIMAL).writerow(row)
-    return s.getvalue() + nl
 
 
 def process_gp2_in_place(path: Path) -> None:
-    """Apply the GP2 header offset rigidly, then reset it to zero."""
+    """Apply the GP2 header offset along the local track, then reset it to zero."""
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not lines:
         return
 
-    h = next(
-        (
-            i
-            for i, ln in enumerate(lines)
-            if not ln.strip().startswith(";") and "gps" in ln.lower()
-        ),
-        None,
-    )
+    h = find_data_header(lines)
     if h is None:
         return
     o = next(
@@ -184,10 +179,8 @@ def process_gp2_in_place(path: Path) -> None:
     if o is None:
         raise ValueError(f"{path}: missing ;Offset_m=")
 
-    header, _ = _parse_csv_line(lines[h])
-    gps_idx = next(
-        (i for i, name in enumerate(header) if name.strip().lower() == "gps"), None
-    )
+    header, _ = parse_csv_line(lines[h])
+    gps_idx = find_column(header, "gps")
     if gps_idx is None:
         return
 
@@ -197,7 +190,7 @@ def process_gp2_in_place(path: Path) -> None:
             continue
         idxs.append(i)
         try:
-            row, _ = _parse_csv_line(lines[i])
+            row, _ = parse_csv_line(lines[i])
             ggas.append(parse_gpgga(row[gps_idx]) if len(row) > gps_idx else None)
         except Exception:
             ggas.append(None)
@@ -224,12 +217,12 @@ def process_gp2_in_place(path: Path) -> None:
         ys.append(y)
         zs.append(g.z_m)
 
-    heading = estimate_line_heading(xs, ys)
+    headings = estimate_heading_series(xs, ys)
     xyz2 = [
         (math.nan, math.nan, math.nan)
         if any(math.isnan(v) for v in (x, y, z))
         else apply_offset(x, y, z, heading, offset)
-        for x, y, z in zip(xs, ys, zs, strict=False)
+        for x, y, z, heading in zip(xs, ys, zs, headings, strict=False)
     ]
 
     nl = "\r\n" if lines[o].endswith("\r\n") else "\n"
@@ -240,10 +233,26 @@ def process_gp2_in_place(path: Path) -> None:
         x2, y2, z2 = xyz2[i]
         if g is None or any(math.isnan(v) for v in (x2, y2, z2)):
             continue
-        row, row_nl = _parse_csv_line(lines[li])
+        row, row_nl = parse_csv_line(lines[li])
         lat2, lon2 = inverse_project_xy_to_latlon(x2, y2, proj)
         alt2 = z2 - g.geoid_sep_m if g.geoid_sep_m is not None else z2
         row[gps_idx] = format_gpgga_with_checksum(g, lat2, lon2, alt2)
-        lines[li] = _fmt_csv_line(row, row_nl)
+        lines[li] = format_csv_line(row, row_nl)
 
     path.write_text("".join(lines), encoding="utf-8")
+
+
+def main() -> None:
+    selected = choose_gp2_files("Select GP2 files to offset-correct")
+    gp2_files = copy_selected_to_subfolder(selected, "offset_corrected")
+
+    print(f"Copied {len(gp2_files)} selected file(s) to offset_corrected folder(s)")
+    print(f"Applying offsets to {len(gp2_files)} file(s)...")
+    for path in gp2_files:
+        process_gp2_in_place(path)
+        print(f"  processed: {path.name}")
+    print("Done")
+
+
+if __name__ == "__main__":
+    main()
