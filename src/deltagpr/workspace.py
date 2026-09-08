@@ -66,21 +66,47 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
     return output_dir
 
 
-def sort_gp2_by_channel(deltagpr_dir: str | Path, gp2_files: Iterable[Path]) -> None:
-    """Move each line's files into a chN subfolder, based on the channel in its file name.
+def _extract_nominal_frequency(hd_file: Path) -> str | None:
+    """Extract nominal frequency number from a .hd file, e.g. '250' from 'Nominal Frequency = 250'."""
+    if not hd_file.is_file():
+        return None
+    try:
+        content = hd_file.read_text(encoding="utf-8", errors="replace")
+        match = re.search(r"Nominal\s+Frequency\b[^\d]*(\d+)", content, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return None
 
-    Exports that were already split into categories before flattening (see
-    ``prepare_from_gpz``) can be re-grouped afterwards using the "-chN" suffix in
-    each file name, since that channel number is a stable stand-in for whatever
-    category (antenna, frequency, ...) the proprietary software originally used.
+
+def sort_gp2_by_channel(deltagpr_dir: str | Path, gp2_files: Iterable[Path]) -> None:
+    """Move each line's files into a channel subfolder (e.g. ch1-250mhz, ch2-500mhz).
+
+    Inspects a .hd file for each channel to find the 'Nominal Frequency' and names
+    the subfolder 'ch<N>-<freq>mhz' (or 'ch<N>' if frequency is not found). If files
+    do not have a '-chN' suffix, they are placed into 'ch1-<freq>mhz' or 'ch1'.
     """
     deltagpr_dir = Path(deltagpr_dir)
+    channel_folders: dict[str, Path] = {}
+
     for gp2_file in gp2_files:
         match = re.search(r"-ch(\d+)$", gp2_file.stem, re.IGNORECASE)
-        if match is None:
-            print(f"  Warning: no channel found in name for {gp2_file.name}, skipping")
-            continue
-        target_dir = deltagpr_dir / f"ch{match.group(1)}"
-        target_dir.mkdir(exist_ok=True)
+        ch_key = f"ch{match.group(1)}" if match else "ch1"
+
+        if ch_key not in channel_folders:
+            freq = None
+            line_files = list(deltagpr_dir.glob(f"{gp2_file.stem}.*"))
+            hd_files = [f for f in line_files if f.suffix.lower() == ".hd"]
+            if hd_files:
+                freq = _extract_nominal_frequency(hd_files[0])
+
+            subfolder_name = f"{ch_key}-{freq}mhz" if freq else ch_key
+            target_dir = deltagpr_dir / subfolder_name
+            target_dir.mkdir(exist_ok=True)
+            channel_folders[ch_key] = target_dir
+
+        target_dir = channel_folders[ch_key]
         for file in deltagpr_dir.glob(f"{gp2_file.stem}.*"):
-            shutil.move(str(file), target_dir / file.name)
+            if file.is_file():
+                shutil.move(str(file), target_dir / file.name)
