@@ -9,6 +9,7 @@ from pyproj import CRS
 from shapely.geometry import LineString
 
 from .gp2 import find_column, find_data_header, list_gp2_files, parse_csv_line, parse_gpgga
+from .warnings_log import log_warning
 
 
 def _read_coordinates(path: Path) -> list[tuple[float, float]]:
@@ -118,7 +119,8 @@ def tracklines_to_shape(
     for path in files:
         coordinates = _read_coordinates(path)
         if len(coordinates) < 2:
-            raise ValueError(f"{path} contains fewer than two valid GPS coordinates")
+            log_warning(f"{path.name} has fewer than two valid GPS coordinates, skipping")
+            continue
         records.append(
             {
                 "linename": path.stem,
@@ -127,6 +129,8 @@ def tracklines_to_shape(
                 "geometry": LineString(coordinates),
             }
         )
+    if not records:
+        raise ValueError("No GP2 file had enough valid GPS coordinates for a trackline")
 
     destination = (
         Path(output_path)
