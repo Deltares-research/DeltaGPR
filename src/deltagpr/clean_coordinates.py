@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import statistics
 import tkinter as tk
+from collections.abc import Iterable
 from pathlib import Path
 
 from .dialogs import choose_gp2_files, copy_selected_to_subfolder
@@ -55,23 +56,31 @@ def prompt_cleaning_method() -> str:
 
 def clean_gp2_coordinates_in_place(
     path: Path, method: str = "inner_endpoints"
-) -> int:
-    """Replace repeated-trace coordinates with one representative position."""
+) -> dict[str, int]:
+    """Replace repeated-trace coordinates with one representative position.
+
+    Returns a dict with ``endpoint_groups``/``endpoint_rows`` (duplicate groups at
+    the start or end of the file, replaced by a single existing GPS fix) and
+    ``median_groups``/``median_rows`` (duplicate groups in the middle, replaced by
+    the group's median position).
+    """
     if method not in METHODS:
         raise ValueError(f"Unknown cleaning method: {method}")
+
+    stats = {"endpoint_groups": 0, "endpoint_rows": 0, "median_groups": 0, "median_rows": 0}
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(
         keepends=True
     )
     header_index = find_data_header(lines)
     if header_index is None:
-        return 0
+        return stats
 
     header, _ = parse_csv_line(lines[header_index])
     trace_index = find_column(header, "traces")
     gps_index = find_column(header, "gps")
     if trace_index is None or gps_index is None:
-        return 0
+        return stats
 
     records = []
     for line_index in range(header_index + 1, len(lines)):
@@ -101,7 +110,6 @@ def clean_gp2_coordinates_in_place(
     if group:
         groups.append(group)
 
-    cleaned_rows = 0
     for group_index, group in enumerate(groups):
         if len(group) < 2:
             continue
@@ -111,6 +119,12 @@ def clean_gp2_coordinates_in_place(
             or len(groups) == 1
             or 0 < group_index < len(groups) - 1
         )
+        if use_median:
+            stats["median_groups"] += 1
+            stats["median_rows"] += len(group)
+        else:
+            stats["endpoint_groups"] += 1
+            stats["endpoint_rows"] += len(group)
         if use_median:
             latitude = statistics.median(record[4].latitude for record in group)
             longitude = statistics.median(record[4].longitude for record in group)
@@ -135,10 +149,20 @@ def clean_gp2_coordinates_in_place(
                 gga, latitude, longitude, altitude
             )
             lines[line_index] = format_csv_line(row, newline)
-            cleaned_rows += 1
 
     path.write_text("".join(lines), encoding="utf-8")
-    return cleaned_rows
+    return stats
+
+
+def clean_gp2_coordinates(paths: Iterable[Path], method: str = "inner_endpoints") -> None:
+    """Clean GP2 coordinates in place for multiple files, printing per-file stats."""
+    for path in paths:
+        stats = clean_gp2_coordinates_in_place(path, method)
+        print(
+            f"  {path.name}: {stats['endpoint_groups']} start/end duplicate groups "
+            f"({stats['endpoint_rows']} rows) set to the nearest GPS fix, "
+            f"{stats['median_groups']} middle duplicate groups ({stats['median_rows']} rows) set to the median position"
+        )
 
 
 def main() -> None:
@@ -150,9 +174,7 @@ def main() -> None:
         f"Copied {len(gp2_files)} selected file(s) to clean_coordinates folder(s)"
     )
     print(f"Cleaning method: {METHOD_LABELS[method]}")
-    for path in gp2_files:
-        cleaned_rows = clean_gp2_coordinates_in_place(path, method)
-        print(f"  cleaned: {path.name} ({cleaned_rows} grouped rows)")
+    clean_gp2_coordinates(gp2_files, method)
     print("Done")
 
 

@@ -12,7 +12,7 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
     subfolder per survey line. This extracts the archive next to itself, then
     copies the files from within each Lineset subfolder (not the subfolders
     themselves) into ``output_dir``, so the result contains only .dt1/.hd/.gp2
-    files.
+    files. The extracted archive folder is removed afterwards.
 
     Parameters
     ----------
@@ -42,5 +42,7 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
             for file in subfolder.iterdir():
                 if file.is_file():
                     shutil.copy2(file, output_dir / file.name)
+
+    shutil.rmtree(extract_dir)
 
     return output_dir

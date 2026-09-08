@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Iterable
 from pathlib import Path
 from tkinter import messagebox
 
@@ -110,6 +111,34 @@ def edit_gp2_headers_in_place(
     return offset_updated, latency_updated
 
 
+def edit_gp2_headers(
+    paths: Iterable[Path],
+    x_off: str | None,
+    y_off: str | None,
+    z_off: str | None,
+    latency: str | None,
+) -> None:
+    """Edit GP2 headers in place for multiple files and print a one-line summary."""
+    paths = list(paths)
+    offset_desc = ",".join(v if v is not None else "unchanged" for v in (x_off, y_off, z_off))
+    latency_desc = latency if latency is not None else "unchanged"
+    print(f"  Offset_m={offset_desc} | Latency={latency_desc}")
+
+    missing_offset = 0
+    missing_latency = 0
+    for path in paths:
+        has_offset, has_latency = edit_gp2_headers_in_place(path, x_off, y_off, z_off, latency)
+        if (x_off is not None or y_off is not None or z_off is not None) and not has_offset:
+            missing_offset += 1
+        if latency is not None and not has_latency:
+            missing_latency += 1
+
+    if latency is not None:
+        print(f"  Latency updated in {len(paths) - missing_latency}/{len(paths)} files")
+    if x_off is not None or y_off is not None or z_off is not None:
+        print(f"  Offset_m updated in {len(paths) - missing_offset}/{len(paths)} files")
+
+
 def main() -> None:
     selected = choose_gp2_files("Select GP2 files to edit")
     x_off, y_off, z_off, latency = prompt_header_values()
@@ -121,33 +150,7 @@ def main() -> None:
     gp2_files = copy_selected_to_subfolder(selected, "edit_headers")
 
     print(f"Copied {len(gp2_files)} selected file(s) to edit_headers folder(s)")
-    offset_desc = ",".join(v if v is not None else "unchanged" for v in (x_off, y_off, z_off))
-    latency_desc = latency if latency is not None else "unchanged"
-    print(f"Applying header edits: Offset_m={offset_desc} | Latency={latency_desc}")
-
-    missing_offset = 0
-    missing_latency = 0
-    for file_path in gp2_files:
-        has_offset, has_latency = edit_gp2_headers_in_place(
-            file_path, x_off, y_off, z_off, latency
-        )
-        if (x_off is not None or y_off is not None or z_off is not None) and not has_offset:
-            missing_offset += 1
-        if latency is not None and not has_latency:
-            missing_latency += 1
-        print(f"  edited: {file_path.name}")
-
-    if missing_offset:
-        print(
-            f"Warning: Offset_m header not found (or incomplete) in {missing_offset} "
-            "file(s), so it was not changed there."
-        )
-    if missing_latency:
-        print(
-            f"Warning: Latency_s/Latency header not found in {missing_latency} "
-            "file(s), so it was not changed there."
-        )
-
+    edit_gp2_headers(gp2_files, x_off, y_off, z_off, latency)
     print("Done")
 
 

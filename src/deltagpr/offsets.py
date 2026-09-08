@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Iterable
 from pathlib import Path
 
 from pyproj import Transformer
@@ -164,15 +165,19 @@ def apply_offset(
     )
 
 
-def process_gp2_in_place(path: Path) -> None:
-    """Apply the GP2 header offset along the local track, then reset it to zero."""
+def process_gp2_in_place(path: Path) -> Offset | None:
+    """Apply the GP2 header offset along the local track, then reset it to zero.
+
+    Returns the ``Offset`` (in meters) that was applied, or ``None`` if the file
+    had no valid GPS fixes to apply it to.
+    """
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not lines:
-        return
+        return None
 
     h = find_data_header(lines)
     if h is None:
-        return
+        return None
     o = next(
         (i for i in range(h) if lines[i].strip().lower().startswith(";offset_m=")), None
     )
@@ -182,7 +187,7 @@ def process_gp2_in_place(path: Path) -> None:
     header, _ = parse_csv_line(lines[h])
     gps_idx = find_column(header, "gps")
     if gps_idx is None:
-        return
+        return None
 
     idxs, ggas = [], []
     for i in range(h + 1, len(lines)):
@@ -197,7 +202,7 @@ def process_gp2_in_place(path: Path) -> None:
 
     valid = [g for g in ggas if g is not None]
     if not valid:
-        return
+        return None
 
     offset = parse_offset_line(lines[o])
     proj = _make_projector(
@@ -240,6 +245,20 @@ def process_gp2_in_place(path: Path) -> None:
         lines[li] = format_csv_line(row, row_nl)
 
     path.write_text("".join(lines), encoding="utf-8")
+    return offset
+
+
+def process_gp2(paths: Iterable[Path]) -> None:
+    """Apply GP2 header offsets in place for multiple files, printing per-file results."""
+    for path in paths:
+        offset = process_gp2_in_place(path)
+        if offset is None:
+            print(f"  {path.name}: skipped (no valid GPS fixes)")
+        else:
+            print(
+                f"  {path.name}: offset x={offset.offset_x:+.2f} m, y={offset.offset_y:+.2f} m, "
+                f"z={offset.offset_z:+.2f} m applied, header offset reset to 0"
+            )
 
 
 def main() -> None:
@@ -248,9 +267,7 @@ def main() -> None:
 
     print(f"Copied {len(gp2_files)} selected file(s) to offset_corrected folder(s)")
     print(f"Applying offsets to {len(gp2_files)} file(s)...")
-    for path in gp2_files:
-        process_gp2_in_place(path)
-        print(f"  processed: {path.name}")
+    process_gp2(gp2_files)
     print("Done")
 
 
