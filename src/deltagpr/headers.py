@@ -5,45 +5,47 @@ from pathlib import Path
 from tkinter import messagebox
 
 from .dialogs import choose_gp2_files, copy_selected_to_subfolder
-from .gp2 import find_data_header, update_existing_header
+from .gp2 import find_data_header, find_header_value, update_existing_header
 
 
-def prompt_header_values() -> tuple[str, str, str, str]:
+def prompt_header_values() -> tuple[str | None, str | None, str | None, str | None]:
     root = tk.Tk()
     root.title("Edit GP2 Headers")
     root.attributes("-topmost", True)
     root.resizable(False, False)
 
-    fields = [
-        ("X offset", "0.00"),
-        ("Y offset", "0.00"),
-        ("Z offset", "0.00"),
-        ("Latency", "0.00"),
-    ]
+    fields = ["X offset", "Y offset", "Z offset", "Latency"]
 
     entries: list[tk.Entry] = []
-    for i, (label, default) in enumerate(fields):
+    for i, label in enumerate(fields):
         tk.Label(root, text=label, anchor="w", width=12).grid(
             row=i, column=0, padx=8, pady=5, sticky="w"
         )
         e = tk.Entry(root, width=18)
-        e.insert(0, default)
         e.grid(row=i, column=1, padx=8, pady=5)
         entries.append(e)
 
-    result: dict[str, tuple[str, str, str, str] | None] = {"values": None}
+    tk.Label(
+        root,
+        text="Leave a field blank to keep its existing value unchanged.",
+        anchor="w",
+        fg="gray",
+    ).grid(row=len(fields), column=0, columnspan=2, padx=8, sticky="w")
+
+    result: dict[str, tuple[str | None, str | None, str | None, str | None] | None] = {
+        "values": None
+    }
 
     def on_ok() -> None:
-        vals = [e.get().strip() for e in entries]
+        vals = [e.get().strip() or None for e in entries]
         try:
-            float(vals[0])
-            float(vals[1])
-            float(vals[2])
-            float(vals[3])
+            for val in vals:
+                if val is not None:
+                    float(val)
         except ValueError:
             messagebox.showerror(
                 "Invalid value",
-                "Please enter numeric values for all fields.",
+                "Please enter numeric values, or leave a field blank.",
                 parent=root,
             )
             return
@@ -54,7 +56,7 @@ def prompt_header_values() -> tuple[str, str, str, str]:
         root.destroy()
 
     btn_frame = tk.Frame(root)
-    btn_frame.grid(row=len(fields), column=0, columnspan=2, pady=(6, 10))
+    btn_frame.grid(row=len(fields) + 1, column=0, columnspan=2, pady=(6, 10))
     tk.Button(btn_frame, text="OK", width=10, command=on_ok).pack(side="left", padx=6)
     tk.Button(btn_frame, text="Cancel", width=10, command=on_cancel).pack(
         side="left", padx=6
@@ -69,7 +71,11 @@ def prompt_header_values() -> tuple[str, str, str, str]:
 
 
 def edit_gp2_headers_in_place(
-    path: Path, x_off: str, y_off: str, z_off: str, latency: str
+    path: Path,
+    x_off: str | None,
+    y_off: str | None,
+    z_off: str | None,
+    latency: str | None,
 ) -> tuple[bool, bool]:
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not lines:
@@ -80,12 +86,25 @@ def edit_gp2_headers_in_place(
     if data_header_idx is None:
         data_header_idx = len(lines)
 
-    offset_updated = update_existing_header(
-        lines, ["Offset_m"], f"{x_off},{y_off},{z_off}", data_header_idx, nl
-    )
-    latency_updated = update_existing_header(
-        lines, ["Latency_s", "Latency"], latency, data_header_idx, nl
-    )
+    offset_updated = False
+    if x_off is not None or y_off is not None or z_off is not None:
+        existing_offset = find_header_value(lines, ["Offset_m"], data_header_idx)
+        existing_parts = existing_offset.split(",") if existing_offset else []
+        existing_parts += [None] * (3 - len(existing_parts))
+        resolved = [
+            new if new is not None else existing
+            for new, existing in zip((x_off, y_off, z_off), existing_parts)
+        ]
+        if all(part is not None for part in resolved):
+            offset_updated = update_existing_header(
+                lines, ["Offset_m"], ",".join(resolved), data_header_idx, nl
+            )
+
+    latency_updated = False
+    if latency is not None:
+        latency_updated = update_existing_header(
+            lines, ["Latency_s", "Latency"], latency, data_header_idx, nl
+        )
 
     path.write_text("".join(lines), encoding="utf-8")
     return offset_updated, latency_updated
@@ -95,12 +114,16 @@ def main() -> None:
     selected = choose_gp2_files("Select GP2 files to edit")
     x_off, y_off, z_off, latency = prompt_header_values()
 
+    if x_off is None and y_off is None and z_off is None and latency is None:
+        print("No values entered, nothing to change")
+        return
+
     gp2_files = copy_selected_to_subfolder(selected, "edit_headers")
 
     print(f"Copied {len(gp2_files)} selected file(s) to edit_headers folder(s)")
-    print(
-        f"Applying header edits: Offset_m={x_off},{y_off},{z_off} | Latency={latency}"
-    )
+    offset_desc = ",".join(v if v is not None else "unchanged" for v in (x_off, y_off, z_off))
+    latency_desc = latency if latency is not None else "unchanged"
+    print(f"Applying header edits: Offset_m={offset_desc} | Latency={latency_desc}")
 
     missing_offset = 0
     missing_latency = 0
@@ -108,16 +131,16 @@ def main() -> None:
         has_offset, has_latency = edit_gp2_headers_in_place(
             file_path, x_off, y_off, z_off, latency
         )
-        if not has_offset:
+        if (x_off is not None or y_off is not None or z_off is not None) and not has_offset:
             missing_offset += 1
-        if not has_latency:
+        if latency is not None and not has_latency:
             missing_latency += 1
         print(f"  edited: {file_path.name}")
 
     if missing_offset:
         print(
-            f"Warning: Offset_m header not found in {missing_offset} file(s), "
-            "so it was not changed there."
+            f"Warning: Offset_m header not found (or incomplete) in {missing_offset} "
+            "file(s), so it was not changed there."
         )
     if missing_latency:
         print(
@@ -130,3 +153,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

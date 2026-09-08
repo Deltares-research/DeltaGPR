@@ -3,7 +3,23 @@ from __future__ import annotations
 import csv
 import io
 import math
+from collections.abc import Iterable
+from pathlib import Path
 from types import SimpleNamespace
+
+
+def list_gp2_files(paths: str | Path | Iterable[str | Path]) -> list[Path]:
+    """Resolve GP2 files/folders/iterables into a sorted list of .gp2 file paths."""
+    if isinstance(paths, (str, Path)):
+        path = Path(paths)
+        files = path.rglob("*") if path.is_dir() else [path]
+    else:
+        files = (Path(path) for path in paths)
+
+    return sorted(
+        (path for path in files if path.is_file() and path.suffix.lower() == ".gp2"),
+        key=lambda path: str(path).lower(),
+    )
 
 
 def nmea_to_decimal(coordinate: str, hemisphere: str) -> float:
@@ -112,3 +128,14 @@ def update_existing_header(
         lines[index] = f"{existing_key}={value}{newline}"
         return True
     return False
+
+
+def find_header_value(
+    lines: list[str], keys: list[str], data_header_index: int
+) -> str | None:
+    prefixes = [f";{key}=".lower() for key in keys]
+    for index in range(data_header_index):
+        stripped = lines[index].strip()
+        if any(stripped.lower().startswith(prefix) for prefix in prefixes):
+            return stripped.split("=", 1)[1]
+    return None

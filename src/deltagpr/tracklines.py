@@ -8,20 +8,7 @@ import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import LineString
 
-from .gp2 import find_column, find_data_header, parse_csv_line, parse_gpgga
-
-
-def _gp2_files(paths: str | Path | Iterable[str | Path]) -> list[Path]:
-    if isinstance(paths, (str, Path)):
-        path = Path(paths)
-        files = path.rglob("*") if path.is_dir() else [path]
-    else:
-        files = (Path(path) for path in paths)
-
-    return sorted(
-        (path for path in files if path.is_file() and path.suffix.lower() == ".gp2"),
-        key=lambda path: str(path).lower(),
-    )
+from .gp2 import find_column, find_data_header, list_gp2_files, parse_csv_line, parse_gpgga
 
 
 def _read_coordinates(path: Path) -> list[tuple[float, float]]:
@@ -123,7 +110,7 @@ def tracklines_to_shape(
     if gp2_files is None:
         gp2_files, output_crs = _prompt_for_files_and_crs()
 
-    files = _gp2_files(gp2_files)
+    files = list_gp2_files(gp2_files)
     if not files:
         raise ValueError("No GP2 files found")
 
