@@ -14,7 +14,10 @@ class TestSortGp2ByChannel(unittest.TestCase):
             dt1_file = deltagpr_dir / "Line1-ch2.dt1"
 
             gp2_file.write_text("gp2 content", encoding="utf-8")
-            hd_file.write_text("NUMBER OF TRACES   = 100\nNominal Frequency = 250\n", encoding="utf-8")
+            hd_file.write_text(
+                "NUMBER OF TRACES   = 100\nNominal Frequency = 250\n",
+                encoding="utf-8",
+            )
             dt1_file.write_text("dt1 content", encoding="utf-8")
 
             sort_gp2_by_channel(deltagpr_dir, [gp2_file])

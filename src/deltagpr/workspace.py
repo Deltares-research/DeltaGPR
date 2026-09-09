@@ -6,10 +6,20 @@ import zipfile
 from collections.abc import Iterable
 from pathlib import Path
 
+from .gp2 import list_gp2_files
 from .warnings_log import log_warning
 
 
-def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
+def deltagpr_output_dir(gpz_file: str | Path) -> Path:
+    """Return the standard ``<gpz_stem>_deltagpr`` output folder for a .gpz file."""
+    gpz_file = Path(gpz_file)
+    return gpz_file.parent / f"{gpz_file.stem}_deltagpr"
+
+
+def prepare_from_gpz(
+    gpz_file: str | Path,
+    output_dir: str | Path | None = None,
+) -> tuple[Path, list[Path]]:
     """Unpack an Ekko_Project .gpz export and flatten its lines into one folder.
 
     A raw .gpz export is a plain zip archive containing a ``Lineset`` folder with
@@ -25,16 +35,19 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
     ----------
     gpz_file : path-like
         Path to the .gpz archive.
-    output_dir : path-like
-        Folder to copy the flattened line files into. Created if missing.
+    output_dir : path-like, optional
+        Folder to copy the flattened line files into. Created if missing. Defaults
+        to :func:`deltagpr_output_dir`.
 
     Returns
     -------
-    pathlib.Path
-        ``output_dir``, containing the flattened line files.
+    tuple[pathlib.Path, list[pathlib.Path]]
+        ``output_dir`` and the .gp2 files now in it.
     """
     gpz_file = Path(gpz_file)
-    output_dir = Path(output_dir)
+    output_dir = (
+        Path(output_dir) if output_dir is not None else deltagpr_output_dir(gpz_file)
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     extract_dir = gpz_file.parent / gpz_file.stem
@@ -42,7 +55,11 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
         archive.extractall(extract_dir)
 
     lineset_dir = next(
-        (path for path in extract_dir.rglob("*") if path.is_dir() and path.name.lower() == "lineset"),
+        (
+            path
+            for path in extract_dir.rglob("*")
+            if path.is_dir() and path.name.lower() == "lineset"
+        ),
         None,
     )
     if lineset_dir is not None:
@@ -50,9 +67,11 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
     else:
         category_dirs = [path for path in extract_dir.iterdir() if path.is_dir()]
         log_warning(
-            f"{gpz_file.name} has no 'Lineset' folder, so it is NOT a raw export from the GPR "
-            "equipment - it looks like it was already opened and sorted into categories "
-            f"({', '.join(sorted(d.name for d in category_dirs))}) by the proprietary software."
+            f"{gpz_file.name} has no 'Lineset' folder, so it is NOT a raw "
+            "export from the GPR equipment - it looks like it was already "
+            "opened and sorted into categories "
+            f"({', '.join(sorted(d.name for d in category_dirs))}) by the "
+            "proprietary software."
         )
         source_dirs = category_dirs
 
@@ -63,11 +82,11 @@ def prepare_from_gpz(gpz_file: str | Path, output_dir: str | Path) -> Path:
 
     shutil.rmtree(extract_dir)
 
-    return output_dir
+    return output_dir, list_gp2_files(output_dir)
 
 
 def _extract_nominal_frequency(hd_file: Path) -> str | None:
-    """Extract nominal frequency number from a .hd file, e.g. '250' from 'Nominal Frequency = 250'."""
+    """Extract nominal frequency number from a .hd file."""
     if not hd_file.is_file():
         return None
     try:

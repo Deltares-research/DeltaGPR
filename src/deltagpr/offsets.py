@@ -249,14 +249,15 @@ def process_gp2_in_place(path: Path) -> Offset | None:
 
 
 def process_gp2(paths: Iterable[Path]) -> None:
-    """Apply GP2 header offsets in place for multiple files, printing per-file results."""
+    """Apply GP2 header offsets in place for multiple files."""
     for path in paths:
         offset = process_gp2_in_place(path)
         if offset is None:
             print(f"  {path.name}: skipped (no valid GPS fixes)")
         else:
             print(
-                f"  {path.name}: offset x={offset.offset_x:+.2f} m, y={offset.offset_y:+.2f} m, "
+                f"  {path.name}: offset x={offset.offset_x:+.2f} m, "
+                f"y={offset.offset_y:+.2f} m, "
                 f"z={offset.offset_z:+.2f} m applied, header offset reset to 0"
             )
 

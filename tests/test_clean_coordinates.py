@@ -56,7 +56,15 @@ class TestCleanCoordinates(unittest.TestCase):
             output = list(csv.reader(path.read_text(encoding="utf-8").splitlines()))
             sentences = [row[1] for row in output[2:]]
             fixes = [parse_gpgga(sentence) for sentence in sentences]
-            self.assertEqual(cleaned, 3)
+            self.assertEqual(
+                cleaned,
+                {
+                    "endpoint_groups": 0,
+                    "endpoint_rows": 0,
+                    "median_groups": 1,
+                    "median_rows": 3,
+                },
+            )
             self.assertEqual(len(fixes), 3)
             self.assertEqual([fix.fields[1] for fix in fixes], [
                 "100000.00",
@@ -85,7 +93,15 @@ class TestCleanCoordinates(unittest.TestCase):
 
             cleaned = clean_gp2_coordinates_in_place(path)
 
-            self.assertEqual(cleaned, 0)
+            self.assertEqual(
+                cleaned,
+                {
+                    "endpoint_groups": 0,
+                    "endpoint_rows": 0,
+                    "median_groups": 0,
+                    "median_rows": 0,
+                },
+            )
             self.assertEqual(path.read_text(encoding="utf-8"), content)
 
     def test_inner_and_outer_endpoints_use_median_for_middle_groups(self):

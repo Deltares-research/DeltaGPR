@@ -120,15 +120,22 @@ def edit_gp2_headers(
 ) -> None:
     """Edit GP2 headers in place for multiple files and print a one-line summary."""
     paths = list(paths)
-    offset_desc = ",".join(v if v is not None else "unchanged" for v in (x_off, y_off, z_off))
+    offset_desc = ",".join(
+        v if v is not None else "unchanged" for v in (x_off, y_off, z_off)
+    )
     latency_desc = latency if latency is not None else "unchanged"
     print(f"  Offset_m={offset_desc} | Latency={latency_desc}")
 
     missing_offset = 0
     missing_latency = 0
     for path in paths:
-        has_offset, has_latency = edit_gp2_headers_in_place(path, x_off, y_off, z_off, latency)
-        if (x_off is not None or y_off is not None or z_off is not None) and not has_offset:
+        has_offset, has_latency = edit_gp2_headers_in_place(
+            path, x_off, y_off, z_off, latency
+        )
+        should_update_offset = (
+            x_off is not None or y_off is not None or z_off is not None
+        )
+        if should_update_offset and not has_offset:
             missing_offset += 1
         if latency is not None and not has_latency:
             missing_latency += 1

@@ -7,6 +7,11 @@ __pycache__/
 *.py[cod]
 .ruff_cache/
 
+# Build artifacts
+build/
+dist/
+*.spec
+
 # Generated processing outputs
 **/offset corrected/
 **/offset_corrected/

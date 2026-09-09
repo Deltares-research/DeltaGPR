@@ -8,7 +8,13 @@ import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import LineString
 
-from .gp2 import find_column, find_data_header, list_gp2_files, parse_csv_line, parse_gpgga
+from .gp2 import (
+    find_column,
+    find_data_header,
+    list_gp2_files,
+    parse_csv_line,
+    parse_gpgga,
+)
 from .warnings_log import log_warning
 
 
@@ -119,7 +125,9 @@ def tracklines_to_shape(
     for path in files:
         coordinates = _read_coordinates(path)
         if len(coordinates) < 2:
-            log_warning(f"{path.name} has fewer than two valid GPS coordinates, skipping")
+            log_warning(
+                f"{path.name} has fewer than two valid GPS coordinates, skipping"
+            )
             continue
         records.append(
             {

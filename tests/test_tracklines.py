@@ -67,7 +67,7 @@ class TestTracklinesToShape(unittest.TestCase):
             path = tmp_path / "single.GP2"
             _write_gp2(path, [("5140.0000", "N", "00423.0000", "E")])
 
-            with self.assertRaisesRegex(ValueError, "fewer than two"):
+            with self.assertRaisesRegex(ValueError, "enough valid GPS coordinates"):
                 tracklines_to_shape(path, tmp_path / "tracks.shp")
 
 

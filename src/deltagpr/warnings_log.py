@@ -16,7 +16,7 @@ def log_warning(message: str) -> None:
 
 
 def print_warnings_summary() -> None:
-    """Print all distinct warnings collected so far, so they aren't missed in the verbosity."""
+    """Print all distinct warnings collected so far."""
     unique_messages = list(dict.fromkeys(_warnings))
     if not unique_messages:
         return

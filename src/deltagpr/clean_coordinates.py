@@ -67,7 +67,12 @@ def clean_gp2_coordinates_in_place(
     if method not in METHODS:
         raise ValueError(f"Unknown cleaning method: {method}")
 
-    stats = {"endpoint_groups": 0, "endpoint_rows": 0, "median_groups": 0, "median_rows": 0}
+    stats = {
+        "endpoint_groups": 0,
+        "endpoint_rows": 0,
+        "median_groups": 0,
+        "median_rows": 0,
+    }
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines(
         keepends=True
@@ -154,14 +159,17 @@ def clean_gp2_coordinates_in_place(
     return stats
 
 
-def clean_gp2_coordinates(paths: Iterable[Path], method: str = "inner_endpoints") -> None:
+def clean_gp2_coordinates(
+    paths: Iterable[Path], method: str = "inner_endpoints"
+) -> None:
     """Clean GP2 coordinates in place for multiple files, printing per-file stats."""
     for path in paths:
         stats = clean_gp2_coordinates_in_place(path, method)
         print(
             f"  {path.name}: {stats['endpoint_groups']} start/end duplicate groups "
             f"({stats['endpoint_rows']} rows) set to the nearest GPS fix, "
-            f"{stats['median_groups']} middle duplicate groups ({stats['median_rows']} rows) set to the median position"
+            f"{stats['median_groups']} middle duplicate groups "
+            f"({stats['median_rows']} rows) set to the median position"
         )
 
 
