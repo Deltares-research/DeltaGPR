@@ -1,195 +1,75 @@
 # DeltaGPR
 
-[![License: MIT](https://img.shields.io/pypi/l/imod)](https://choosealicense.com/licenses/mit)
-[![Lifecycle: experimental](https://lifecycle.r-lib.org/articles/figures/lifecycle-experimental.svg)](https://lifecycle.r-lib.org/articles/stages.html)
-[![Formatting: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-
-<img src="docs/deltagpr_logo.png" alt="DeltaGPR Logo" width="100" align="left">
-
-The Deltares Ground Penetrating Radar (DeltaGPR) package provides practical tooling to prepare GPR survey files. It focuses on a straightforward workflow for copying raw survey data into a working subfolder and applying consistent edits there, so original files remain untouched. Current utilities support GP2 header editing and GPS offset correction.
-
-<br clear="left"/>
+DeltaGPR is the generic toolbox for preparing and QC-ing GPR survey data. It handles GP2 header editing, GPS offset correction, coordinate cleaning, height conversion to NAP, and the generic `.gpz` processing pipeline.
 
 ## Setup
 
-The installation uses package manager pixi, for installation options see
-https://pixi.sh/latest/
+1. Install Pixi: https://pixi.sh/
+2. Clone the repo:
+   ```bash
+   git clone https://github.com/Deltares-research/DeltaGPR.git
+   cd DeltaGPR
+   ```
+3. Create the environment and install the package:
+   ```bash
+   pixi run install
+   ```
 
-To install pixi on Windows, in PowerShell type:
+## Main usage
 
-```powershell
-winget install prefix-dev.pixi
-```
+### 1. Run the generic pipeline on `.gpz` files
 
-Now clone DeltaGPR to your local drive using:
-
-```powershell
-git clone https://github.com/Deltares-research/DeltaGPR.git
-```
-
-Then navigate into that folder with:
-
-```powershell
-cd DeltaGPR
-```
-
-To create the environment and install DeltaGPR in it, type:
-
-```powershell
-pixi run install
-```
-
-On Linux, install pixi from the instructions at <https://pixi.sh/latest/>, then
-run the same `pixi run install` command from the repository root.
-
-## Update DeltaGPR
-
-To update DeltaGPR with the latest version from GitHub, open a shell in the DeltaGPR folder and run:
-
-```powershell
-git pull
-pixi run install
-```
-
-## Usage
-
-Example 1: Apply GPS offsets to GP2 data
-
-```powershell
-pixi run apply_offsets
-```
-
-What happens:
-- A file dialog opens to select one or more GP2 files.
-- Selected files are copied to an `offset_corrected` subfolder.
-- For each selected file, the `;Offset_m=` header value is applied to GPS coordinates in that file.
-- After applying the correction, `;Offset_m=` is reset to `0.00,0.00,0.00` in the copied file.
-- This offset application outside of software is a temporary workaround for a known Ekko_Project v6 bug (currently being fixed): 
-
-Example 2: Edit GP2 header values
-
-```powershell
-pixi run edit_headers
-```
-
-What happens:
-- A file dialog opens to select one or more GP2 files.
-- Selected files are copied to an `edit_headers` subfolder.
-- A small form asks for X/Y/Z offset and latency values.
-- Existing header lines are updated in place in GP2 files in the copied folder.
-
-When to use this after `pixi run apply_offsets`:
-- You only need `pixi run edit_headers` if you want to set new header values (for example, a different planned `Offset_m` or latency) for later processing.
-- You do not need it just to zero offsets after `pixi run apply_offsets`; that already happens automatically.
-
-Example 3: Clean repeated GP2 coordinates
-
-```powershell
-pixi run clean_coordinates
-```
-
-A file dialog opens to select one or more GP2 files. Selected files are copied
-to a `clean_coordinates` subfolder. A second dialog offers three methods:
-
-- `Inner endpoints` (default) uses the last position in a starting repeated-trace
-	group and the first position in an ending group.
-- `Outer endpoints` uses the first position in a starting group and the last
-	position in an ending group.
-- `Median` uses the median position for every repeated-trace group.
-
-Both endpoint methods use the median for repeated-trace groups in the middle of
-a line and when one group spans the whole file. Latitude, longitude, and
-ellipsoidal height are cleaned together. Rows, timestamps, and other NMEA fields
-are retained.
-
-Example 4: Export GP2 navigation as tracklines
-
-```powershell
-pixi run tracklines
-```
-
-A file dialog opens to select one or more GP2 files, followed by an output CRS
-prompt. The shapefile is written to a `shapefile` subfolder with the selected file
-range and CRS in its name, for example
-`Line4-ch2_to_Line6-ch6_EPSG28992.shp`.
-
-The same functionality can be called from Python:
-
-```python
-from deltagpr import tracklines_to_shape
-
-tracklines_to_shape("examples/gp2", output_crs=28992)
-```
-
-Each GP2 file becomes one line feature. GP2 coordinates are read as WGS 84 and
-can be transformed to any CRS understood by `pyproj`, such as Dutch RD New above.
-
-Example 5: Process every `.gpz` file in the current folder
-
-```powershell
+```bash
 pixi shell
 cd path/to/folder-with-gpz-files
 deltagpr_pipeline
 ```
 
-The installed command scans the folder where you run it. It creates one
-`<name>_deltagpr` output folder per input file,
-including QC tracklines and a `processing_log.txt`.
+This scans the current folder for `.gpz` files and creates one output folder per file, including QC tracklines and a processing log.
+
+### 2. Use the individual tools
+
+```bash
+pixi run apply_offsets
+pixi run clean_coordinates
+pixi run edit_headers
+pixi run tracklines
+pixi run convert_to_nap
+```
+
+These commands open a file picker and work on a copy of the selected GP2 files so the originals stay untouched.
+
+### 3. Download the NLGEO2018 grid for NAP conversion
+
+```bash
+pixi run download_nap_grid
+```
+
+The conversion to NAP requires the Dutch geoid grid. If it is missing, the tool will tell you and can download it for you.
 
 ## Standalone executable
 
-Build the standalone executable with PyInstaller:
+Build a Windows executable:
 
-```powershell
+```bash
 pixi run build_exe
 ```
 
-On Windows this writes:
+This writes `dist/deltagpr_pipeline.exe`. Copy it next to one or more `.gpz` files and run it there.
 
-```text
-dist/deltagpr_pipeline.exe
-```
-
-Copy the standalone executable into a folder with one or more `.gpz` files and
-run it there. The bundled executable scans its own folder.
-
-To build a native Linux executable, run this on a Linux machine:
+For Linux, build on Linux:
 
 ```bash
 pixi run build_linux_executable
 ```
 
-This writes:
-
-```text
-dist/deltagpr_pipeline
-```
-
-PyInstaller builds for the host OS, so the Linux executable should be built from
-Linux. The Windows build uses the DeltaGPR logo as the executable icon. Linux
-executables do not embed desktop icons in the same way; file managers normally
-get icons from a desktop launcher or packaging metadata.
-
 ## Repository layout
 
-- `src/deltagpr/` contains all installed library and command code.
-- `tests/` contains the automated test suite.
-- `examples/gp2/` contains original GP2 example inputs. Generated outputs are
-	ignored and should not be committed.
-- `optional/gfp_from_excel/` contains a separate experimental GFP/XML geometry
-	utility and its example inputs.
-- `docs/` contains documentation images and the executable icon source.
-- `build/` and `dist/` are generated by PyInstaller and are ignored by Git.
+- `src/deltagpr/`: library code and CLI entry points
+- `tests/`: automated tests
+- `examples/`: example GP2 inputs
+- `docs/`: images and the executable icon
 
-## Development
+## Relationship to deltagpr-projects
 
-Run the complete test and lint checks with:
-
-```powershell
-pixi run test
-pixi run lint
-```
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+Use `DeltaGPR` for the generic tools and the project-specific scripts in `deltagpr-projects` for survey-specific processing choices such as antenna height, latency, and project naming.

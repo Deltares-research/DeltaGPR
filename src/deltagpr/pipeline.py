@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from deltagpr.clean_coordinates import clean_gp2_coordinates
+from deltagpr.convert_to_nap import gp2_heights_to_nap
 from deltagpr.headers import edit_gp2_headers
 from deltagpr.logging_utils import processing_log
 from deltagpr.offsets import process_gp2
@@ -22,7 +23,11 @@ from deltagpr.workspace import (
 )
 
 
-def run_gpz_file(gpz_file: str | Path, project_name: str | None = None) -> Path | None:
+def run_gpz_file(
+    gpz_file: str | Path,
+    project_name: str | None = None,
+    antenna_height: float = 1.0,
+) -> Path | None:
     """Run the full processing pipeline for a single .gpz export.
 
     Output is written to ``<gpz_file.parent>/<gpz_file.stem>_deltagpr``. If that
@@ -48,8 +53,8 @@ def run_gpz_file(gpz_file: str | Path, project_name: str | None = None) -> Path 
 
         qc_tracklines("00_raw")
 
-        print("Editing headers (latency = 0.05 s)")
-        edit_gp2_headers(gp2_files, None, None, None, "0.05")
+        print(f"Editing headers (latency = 0.05 s, z offset = {antenna_height:.2f} m)")
+        edit_gp2_headers(gp2_files, None, None, f"{antenna_height:.2f}", "0.05")
         qc_tracklines("01_edit_headers")
 
         print("Cleaning coordinates")
@@ -59,6 +64,9 @@ def run_gpz_file(gpz_file: str | Path, project_name: str | None = None) -> Path 
         print("Applying offsets")
         process_gp2(gp2_files)
         qc_tracklines("03_apply_offsets")
+
+        print("Converting heights to NAP")
+        gp2_heights_to_nap(gp2_files)
 
         print("Sorting lines into channel subfolders")
         sort_gp2_by_channel(output_dir, gp2_files)
@@ -71,6 +79,15 @@ def run_gpz_file(gpz_file: str | Path, project_name: str | None = None) -> Path 
 
 def main() -> None:
     """Process every .gpz file in the active pipeline folder."""
+    parser = __import__("argparse").ArgumentParser(description="Process GPZ exports")
+    parser.add_argument(
+        "--antenna-height",
+        type=float,
+        default=1.0,
+        help="Antenna height in metres to subtract from GNSS heights before NAP conversion (default: 1.0).",
+    )
+    args = parser.parse_args()
+
     if getattr(sys, "frozen", False):
         folder = Path(sys.executable).resolve().parent
     else:
@@ -83,7 +100,7 @@ def main() -> None:
 
     for gpz_file in gpz_files:
         print(f"\n=== Processing {gpz_file.name} ===")
-        run_gpz_file(gpz_file)
+        run_gpz_file(gpz_file, antenna_height=args.antenna_height)
 
 
 if __name__ == "__main__":

@@ -62,13 +62,20 @@ def parse_gpgga(sentence: str):
 
 
 def format_gpgga_with_checksum(
-    gga, latitude: float, longitude: float, altitude_msl_m: float
+    gga,
+    latitude: float,
+    longitude: float,
+    altitude_msl_m: float,
+    geoid_sep_m: float | None = None,
 ) -> str:
     fields = gga.fields.copy()
     fields[2], fields[3] = decimal_to_nmea(latitude, True)
     fields[4], fields[5] = decimal_to_nmea(longitude, False)
     decimals = len(gga.fields[9].split(".", 1)[1]) if "." in gga.fields[9] else 3
     fields[9] = f"{altitude_msl_m:.{decimals}f}"
+    if geoid_sep_m is not None:
+        decimals = len(gga.fields[11].split(".", 1)[1]) if "." in gga.fields[11] else 3
+        fields[11] = f"{geoid_sep_m:.{decimals}f}"
     body = ",".join(fields)
     checksum = 0
     for character in body[1:]:

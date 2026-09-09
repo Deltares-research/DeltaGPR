@@ -1,4 +1,6 @@
+from .ahn_to_geolitix import ahn_tiffs_to_grd
 from .clean_coordinates import clean_gp2_coordinates
+from .convert_to_nap import convert_to_nap, gp2_heights_to_nap
 from .gp2 import list_gp2_files
 from .headers import edit_gp2_headers
 from .logging_utils import processing_log, start_processing_log
@@ -9,9 +11,12 @@ from .warnings_log import print_warnings_summary
 from .workspace import deltagpr_output_dir, prepare_from_gpz, sort_gp2_by_channel
 
 __all__ = [
+    "ahn_tiffs_to_grd",
     "clean_gp2_coordinates",
+    "convert_to_nap",
     "deltagpr_output_dir",
     "edit_gp2_headers",
+    "gp2_heights_to_nap",
     "list_gp2_files",
     "prepare_from_gpz",
     "print_warnings_summary",
