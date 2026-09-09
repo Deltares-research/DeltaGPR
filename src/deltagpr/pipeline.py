@@ -9,13 +9,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .clean_coordinates import clean_gp2_coordinates
-from .headers import edit_gp2_headers
-from .logging_utils import processing_log
-from .offsets import process_gp2
-from .tracklines import tracklines_to_shape
-from .warnings_log import print_warnings_summary
-from .workspace import deltagpr_output_dir, prepare_from_gpz, sort_gp2_by_channel
+from deltagpr.clean_coordinates import clean_gp2_coordinates
+from deltagpr.headers import edit_gp2_headers
+from deltagpr.logging_utils import processing_log
+from deltagpr.offsets import process_gp2
+from deltagpr.tracklines import tracklines_to_shape
+from deltagpr.warnings_log import print_warnings_summary
+from deltagpr.workspace import (
+    deltagpr_output_dir,
+    prepare_from_gpz,
+    sort_gp2_by_channel,
+)
 
 
 def run_gpz_file(gpz_file: str | Path, project_name: str | None = None) -> Path | None:

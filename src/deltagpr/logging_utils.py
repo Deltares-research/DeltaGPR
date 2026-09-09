@@ -22,6 +22,11 @@ class _Tee:
         for stream in self._streams:
             stream.flush()
 
+    def isatty(self) -> bool:
+        return any(
+            getattr(stream, "isatty", lambda: False)() for stream in self._streams
+        )
+
 
 def start_processing_log(
     output_dir: str | Path,
@@ -36,10 +41,13 @@ def start_processing_log(
     output_dir.mkdir(parents=True, exist_ok=True)
     log_file = open(output_dir / filename, "w", encoding="utf-8")
     original_stdout = sys.stdout
+    original_stderr = sys.stderr
     sys.stdout = _Tee(original_stdout, log_file)
+    sys.stderr = _Tee(original_stderr, log_file)
 
     def _stop() -> None:
         sys.stdout = original_stdout
+        sys.stderr = original_stderr
         log_file.close()
 
     atexit.register(_stop)
@@ -52,9 +60,12 @@ def processing_log(output_dir: str | Path, filename: str = "processing_log.txt")
     output_dir.mkdir(parents=True, exist_ok=True)
     log_file = open(output_dir / filename, "w", encoding="utf-8")
     original_stdout = sys.stdout
+    original_stderr = sys.stderr
     sys.stdout = _Tee(original_stdout, log_file)
+    sys.stderr = _Tee(original_stderr, log_file)
     try:
         yield
     finally:
         sys.stdout = original_stdout
+        sys.stderr = original_stderr
         log_file.close()
