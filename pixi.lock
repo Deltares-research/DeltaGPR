@@ -279,7 +279,7 @@ packages:
 - pypi: ./
   name: deltagpr
   version: 0.1.0
-  sha256: 3947ec211ab1f52c97f69fc2109b6280962feb8e7d96f7a1f42297924b79764f
+  sha256: bcce387ef1d4c54d2a7c0a3a37dd69551b3d74d1a00e926f8daa9a6d4fc9387d
   requires_dist:
   - geopandas>=1.0
   - pandas>=2.0
