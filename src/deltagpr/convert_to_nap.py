@@ -64,6 +64,29 @@ def download_grid() -> Path:
     return target
 
 
+def ensure_grid() -> Path:
+    """Return the NLGEO2018 grid, downloading it once if PROJ cannot find it."""
+    grid_path = find_grid()
+    if grid_path is not None:
+        return grid_path
+
+    user_dir = pyproj.datadir.get_user_data_dir()
+    try:
+        download_grid()
+    except OSError as error:
+        raise SystemExit(
+            f"{GRID_NAME} is missing and could not be downloaded from {GRID_URL} "
+            f"({error}). Download it manually and place it in {user_dir}."
+        ) from error
+
+    grid_path = find_grid()
+    if grid_path is None:
+        raise SystemExit(
+            f"{GRID_NAME} was downloaded but PROJ still cannot find it in {user_dir}."
+        )
+    return grid_path
+
+
 def print_diagnostics(grid_path: Path | None) -> None:
     print("--- diagnostics ---")
     print(f"pyproj version        : {pyproj.__version__}")
@@ -207,6 +230,7 @@ def gp2_heights_to_nap_in_place(
 
 def gp2_heights_to_nap(paths: Iterable[Path]) -> None:
     """Convert the GGA heights of several .gp2 files to NAP, printing per-file stats."""
+    ensure_grid()
     transformer = build_transformer()
     print(f"  Coordinate operation: {transformer.description}")
     for path in paths:

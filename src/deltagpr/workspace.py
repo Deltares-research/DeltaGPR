@@ -50,7 +50,9 @@ def prepare_from_gpz(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    extract_dir = gpz_file.parent / gpz_file.stem
+    # Windows drops trailing spaces and dots when creating a directory but keeps them
+    # when opening files inside it, so an unstripped stem makes extraction fail.
+    extract_dir = gpz_file.parent / (gpz_file.stem.strip(" .") or "gpz_extract")
     with zipfile.ZipFile(gpz_file) as archive:
         archive.extractall(extract_dir)
 

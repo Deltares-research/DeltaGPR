@@ -27,6 +27,12 @@ deltagpr_pipeline
 
 This scans the current folder for `.gpz` files and creates one output folder per file, including QC tracklines and a processing log.
 
+The default antenna height for the executable is `1.0 m`. Override it if needed:
+
+```bash
+deltagpr_pipeline --antenna-height 1.25
+```
+
 ### 2. Use the individual tools
 
 ```bash
@@ -39,13 +45,23 @@ pixi run convert_to_nap
 
 These commands open a file picker and work on a copy of the selected GP2 files so the originals stay untouched.
 
-### 3. Download the NLGEO2018 grid for NAP conversion
+### 3. Convert AHN rasters to GeoLitix grids
+
+```bash
+pixi run ahn_to_geolitix
+```
+
+Converts every AHN GeoTIFF in a folder (a folder picker opens if no path is given) to a Surfer binary `.grd` next to the source raster, which GeoLitix can import. Rasters that already have a `.grd` are skipped, so it is safe to re-run.
+
+### 4. The NLGEO2018 grid for NAP conversion
+
+The conversion to NAP needs the Dutch geoid grid `nl_nsgi_nlgeo2018.tif`. It is downloaded automatically into the PROJ user data folder the first time it is needed, so normally you do not have to do anything. To fetch it up front (for example before going offline):
 
 ```bash
 pixi run download_nap_grid
 ```
 
-The conversion to NAP requires the Dutch geoid grid. If it is missing, the tool will tell you and can download it for you.
+Without the grid PROJ silently falls back to a "ballpark" vertical transformation that leaves heights unchanged, so the tools refuse to run rather than return wrong heights.
 
 ## Standalone executable
 

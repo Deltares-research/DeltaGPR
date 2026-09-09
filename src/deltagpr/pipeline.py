@@ -84,7 +84,10 @@ def main() -> None:
         "--antenna-height",
         type=float,
         default=1.0,
-        help="Antenna height in metres to subtract from GNSS heights before NAP conversion (default: 1.0).",
+        help=(
+            "Antenna height in metres to subtract from GNSS heights before NAP "
+            "conversion (default: 1.0)."
+        ),
     )
     args = parser.parse_args()
 
