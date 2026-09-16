@@ -1,6 +1,6 @@
 """Convert AHN GeoTIFF height rasters to Surfer binary .grd files for GeoLitix.
 
-Reads every .tif/.tiff in a folder and writes ``<name>.grd`` next to each raster.
+Reads every .tif/.tiff in a folder and writes a .grd next to each raster.
 This is a one-time conversion: rasters whose .grd already exists are skipped.
 
 GeoLitix only reads binary Surfer grids, so the default is Surfer 7 binary
@@ -22,12 +22,20 @@ TIFF_SUFFIXES = {".tif", ".tiff"}
 GRID_FORMATS = ("surfer7", "surfer6")
 
 
-def list_tiff_files(input_dir: str | Path) -> list[Path]:
-    """Return the GeoTIFF files directly inside ``input_dir``, sorted by name."""
+def list_tiff_files(
+    input_dir: str | Path,
+    recursive: bool = False,
+    name_contains: str | None = None,
+) -> list[Path]:
+    """Return matching GeoTIFF files inside ``input_dir``, sorted by name."""
+    input_dir = Path(input_dir)
+    files = input_dir.rglob("*") if recursive else input_dir.iterdir()
     return sorted(
         path
-        for path in Path(input_dir).iterdir()
-        if path.is_file() and path.suffix.lower() in TIFF_SUFFIXES
+        for path in files
+        if path.is_file()
+        and path.suffix.lower() in TIFF_SUFFIXES
+        and (name_contains is None or name_contains.lower() in path.name.lower())
     )
 
 
@@ -148,19 +156,25 @@ def ahn_tiffs_to_grd(
     select_x_max: float | None = None,
     select_y_min: float | None = None,
     select_y_max: float | None = None,
+    recursive: bool = False,
+    name_contains: str | None = None,
 ) -> list[Path]:
     """Convert each GeoTIFF in ``input_dir`` to a .grd beside it, skipping existing.
 
     Parameters
     ----------
     input_dir : path-like
-        Folder holding the AHN GeoTIFF files.
+        Folder holding the GeoTIFF files.
     grid_format : {'surfer7', 'surfer6'}
         Binary Surfer grid flavour to write. GeoLitix reads both; 'surfer6' is
         single precision and limited to 32767 rows/columns.
     select_x_min, select_x_max, select_y_min, select_y_max : float, optional
         Bounding box to crop each raster to before writing. Leave all as
         ``None`` to convert the full tile.
+    recursive : bool, default=False
+        Search subfolders of ``input_dir`` for GeoTIFF files.
+    name_contains : str, optional
+        Only convert files whose names contain this text, case-insensitively.
 
     Returns
     -------
@@ -170,15 +184,22 @@ def ahn_tiffs_to_grd(
     if grid_format not in GRID_FORMATS:
         raise ValueError(f"grid_format must be one of {GRID_FORMATS}")
     writer = write_surfer7_binary if grid_format == "surfer7" else write_surfer6_binary
+    has_selection = None not in (
+        select_x_min,
+        select_x_max,
+        select_y_min,
+        select_y_max,
+    )
 
     input_dir = Path(input_dir)
-    tiff_files = list_tiff_files(input_dir)
+    tiff_files = list_tiff_files(input_dir, recursive, name_contains)
     if not tiff_files:
         raise SystemExit(f"No .tif/.tiff files found in {input_dir}")
 
     written = []
     for tiff_file in tiff_files:
-        grd_file = tiff_file.with_suffix(".grd")
+        suffix = "_selection.grd" if has_selection else ".grd"
+        grd_file = tiff_file.with_name(tiff_file.stem + suffix)
         if grd_file.exists():
             print(f"{grd_file.name} already exists, skipped")
             continue
