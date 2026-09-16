@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
+import rasterio.windows
 
 SURFER_BLANK = 1.70141e38
 TIFF_SUFFIXES = {".tif", ".tiff"}
@@ -30,11 +31,27 @@ def list_tiff_files(input_dir: str | Path) -> list[Path]:
     )
 
 
-def read_ahn_tiff(tiff_file: Path) -> tuple[np.ndarray, float, float, float, float]:
-    """Read band 1 as a south-to-north grid plus its node-centre bounds."""
+def read_ahn_tiff(
+    tiff_file: Path,
+    select_x_min: float | None = None,
+    select_x_max: float | None = None,
+    select_y_min: float | None = None,
+    select_y_max: float | None = None,
+) -> tuple[np.ndarray, float, float, float, float]:
+    """Read band 1 as a south-to-north grid plus its node-centre bounds.
+
+    If any of the ``select_*`` bounds are given, only the overlapping window
+    is read from disk instead of the full raster.
+    """
     with rasterio.open(tiff_file) as raster:
-        values = raster.read(1, masked=True).astype("float64")
         transform = raster.transform
+        window = None
+        if None not in (select_x_min, select_x_max, select_y_min, select_y_max):
+            window = rasterio.windows.from_bounds(
+                select_x_min, select_y_min, select_x_max, select_y_max, transform
+            ).round_lengths().round_offsets()
+            transform = raster.window_transform(window)
+        values = raster.read(1, window=window, masked=True).astype("float64")
 
     if transform.b or transform.d:
         raise ValueError(
@@ -124,7 +141,14 @@ def write_surfer6_binary(
         handle.write(values.tobytes())
 
 
-def ahn_tiffs_to_grd(input_dir: str | Path, grid_format: str = "surfer7") -> list[Path]:
+def ahn_tiffs_to_grd(
+    input_dir: str | Path,
+    grid_format: str = "surfer7",
+    select_x_min: float | None = None,
+    select_x_max: float | None = None,
+    select_y_min: float | None = None,
+    select_y_max: float | None = None,
+) -> list[Path]:
     """Convert each GeoTIFF in ``input_dir`` to a .grd beside it, skipping existing.
 
     Parameters
@@ -134,6 +158,9 @@ def ahn_tiffs_to_grd(input_dir: str | Path, grid_format: str = "surfer7") -> lis
     grid_format : {'surfer7', 'surfer6'}
         Binary Surfer grid flavour to write. GeoLitix reads both; 'surfer6' is
         single precision and limited to 32767 rows/columns.
+    select_x_min, select_x_max, select_y_min, select_y_max : float, optional
+        Bounding box to crop each raster to before writing. Leave all as
+        ``None`` to convert the full tile.
 
     Returns
     -------
@@ -155,7 +182,9 @@ def ahn_tiffs_to_grd(input_dir: str | Path, grid_format: str = "surfer7") -> lis
         if grd_file.exists():
             print(f"{grd_file.name} already exists, skipped")
             continue
-        grid, x_min, x_max, y_min, y_max = read_ahn_tiff(tiff_file)
+        grid, x_min, x_max, y_min, y_max = read_ahn_tiff(
+            tiff_file, select_x_min, select_x_max, select_y_min, select_y_max
+        )
         writer(grd_file, grid, x_min, x_max, y_min, y_max)
         print(f"{tiff_file.name} -> {grd_file.name}")
         written.append(grd_file)
@@ -197,13 +226,28 @@ def main() -> None:
         default="surfer7",
         help="Binary Surfer grid flavour to write (default: surfer7)",
     )
+    parser.add_argument("--xmin", dest="select_x_min", type=float, default=None,
+                        help="Crop to this minimum X (default: whole tile)")
+    parser.add_argument("--xmax", dest="select_x_max", type=float, default=None,
+                        help="Crop to this maximum X (default: whole tile)")
+    parser.add_argument("--ymin", dest="select_y_min", type=float, default=None,
+                        help="Crop to this minimum Y (default: whole tile)")
+    parser.add_argument("--ymax", dest="select_y_max", type=float, default=None,
+                        help="Crop to this maximum Y (default: whole tile)")
     args = parser.parse_args()
 
     input_dir = args.input_dir or _prompt_for_input_dir()
     if not input_dir.is_dir():
         raise SystemExit(f"Not a folder: {input_dir}")
 
-    written = ahn_tiffs_to_grd(input_dir, args.grid_format)
+    written = ahn_tiffs_to_grd(
+        input_dir,
+        args.grid_format,
+        args.select_x_min,
+        args.select_x_max,
+        args.select_y_min,
+        args.select_y_max,
+    )
     print(f"Wrote {len(written)} .grd file(s)")
 
 
