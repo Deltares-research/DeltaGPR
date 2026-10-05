@@ -53,7 +53,53 @@ pixi run ahn_to_geolitix
 
 Converts every AHN GeoTIFF in a folder (a folder picker opens if no path is given) to a Surfer binary `.grd` next to the source raster, which GeoLitix can import. Rasters that already have a `.grd` are skipped, so it is safe to re-run.
 
-### 4. The NLGEO2018 grid for NAP conversion
+### 4. Convert EM models to GeoLitix depth grids
+
+```bash
+pixi run em_to_geolitix
+pixi run em_to_geolitix "path/to/model.xyz" --depth 1.5
+pixi run em_to_geolitix "path/to/xyz-folder" --cell-size 0.5 --doi standard
+```
+
+Reads Seequent layered XYZ exports with `X`, `Y`, `RHO_n`, `DEP_TOP_n`, and
+`DEP_BOT_n` columns. With no path, a folder picker opens. By default, every
+native layer is exported as a separate resistivity grid (ohm m), sampled at its
+midpoint. `--depth` instead selects the containing layer at that depth in metres
+below **local ground**, not at a constant NAP elevation. At an internal boundary
+the deeper layer is used; the final model bottom is included. Models with varying
+layer boundaries require an explicit `--depth` to avoid misleading layer labels.
+
+Use `--recursive` to search subfolders and `--name-contains MOD_inv` to select
+inversion-model filenames case-insensitively. These options are also available
+as `recursive` and `name_contains` in the `em_xyzs_to_grd` Python API.
+
+Uses the same Surfer 7 binary writer as the AHN tool; `--format surfer6` is also
+available. A Surfer grid is a 2D scalar map, not a volume: its values here are
+resistivity, not height. The depth/layer interval is in the filename. Import these
+as scalar maps in GeoLitix, not terrain surfaces. This conversion does not establish
+whether GeoLitix supports volumes through some other import format.
+
+The default gridding is linear interpolation at 0.5 coordinate-unit spacing,
+appropriate as a starting point for metre-based survey coordinates. This is display
+sampling, not a claim of 0.5 m EM resolution. Nodes outside the soundings' convex
+hull or farther than 1 m from a sounding are blanked to limit extrapolation and
+gap filling. Adjust `--max-distance` to survey-line spacing; its default is twice
+`--cell-size`. `--method nearest` avoids interpolating values and supports straight
+survey lines, using the distance mask where no 2D hull exists. X/Y coordinates are
+preserved without CRS conversion; select the source CRS when importing.
+
+All model depths are exported by default, including values below the depth of
+investigation. Use `--doi standard` or `--doi conservative` to blank soundings
+where the slice depth exceeds the corresponding DOI column. For all-layer exports,
+DOI is evaluated at each layer midpoint, not its bottom. Linear interpolation also
+blanks triangles touching missing/masked values, so masked coverage is conservative.
+Non-positive/missing resistivity is blanked; duplicate locations are averaged.
+
+Outputs are written beside each XYZ, or to `--output-dir`. Existing outputs are
+skipped; use `--overwrite` when changing gridding settings, which are not encoded
+in the filenames. Source files are never modified.
+
+### 5. The NLGEO2018 grid for NAP conversion
 
 The conversion to NAP needs the Dutch geoid grid `nl_nsgi_nlgeo2018.tif`. It is downloaded automatically into the PROJ user data folder the first time it is needed, so normally you do not have to do anything. To fetch it up front (for example before going offline):
 

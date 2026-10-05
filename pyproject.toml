@@ -6,6 +6,7 @@ dependencies = [
   "openpyxl>=3.1",
   "pyproj>=3.6",
   "rasterio>=1.3",
+  "scipy>=1.11",
   "shapely>=2.0",
 ]
 description = "Deltares tools for Ground Penetrating Radar data preparation and QC"
@@ -30,6 +31,7 @@ deltagpr-apply-offsets = "deltagpr.offsets:main"
 deltagpr-clean-coordinates = "deltagpr.clean_coordinates:main"
 deltagpr-convert-to-nap = "deltagpr.convert_to_nap:main"
 deltagpr-edit-headers = "deltagpr.headers:main"
+deltagpr-em-to-geolitix = "deltagpr.em_to_geolitix:main"
 deltagpr-tracklines = "deltagpr.tracklines:main"
 deltagpr_pipeline = "deltagpr.pipeline:main"
 
@@ -55,6 +57,7 @@ clean_coordinates = "deltagpr-clean-coordinates"
 edit_headers = "deltagpr-edit-headers"
 tracklines = "deltagpr-tracklines"
 ahn_to_geolitix = "deltagpr-ahn-to-geolitix"
+em_to_geolitix = "deltagpr-em-to-geolitix"
 convert_to_nap = "deltagpr-convert-to-nap"
 download_nap_grid = "deltagpr-convert-to-nap --download"
 build_exe = "pyinstaller --onefile --name deltagpr_pipeline --icon ../docs/deltagpr.ico --collect-all pyogrio --collect-all rasterio --collect-all pyproj --distpath dist --workpath build --specpath build src/deltagpr/pipeline.py"

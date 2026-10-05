@@ -1,6 +1,7 @@
 from .ahn_to_geolitix import ahn_tiffs_to_grd
 from .clean_coordinates import clean_gp2_coordinates
 from .convert_to_nap import convert_to_nap, gp2_heights_to_nap
+from .em_to_geolitix import em_xyzs_to_grd
 from .gp2 import list_gp2_files
 from .headers import edit_gp2_headers
 from .logging_utils import processing_log, start_processing_log
@@ -16,6 +17,7 @@ __all__ = [
     "convert_to_nap",
     "deltagpr_output_dir",
     "edit_gp2_headers",
+    "em_xyzs_to_grd",
     "gp2_heights_to_nap",
     "list_gp2_files",
     "prepare_from_gpz",
